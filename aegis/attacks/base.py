@@ -23,8 +23,10 @@ from aegis.interfaces.attack import AttackModule
 from aegis.models import AttackPayload, AttackResult
 
 _SAFE_MODULE_NAME = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
-
-_SENTINEL = object()
+_TOOL_ALIASES: dict[str, str] = {
+    "db": "database",
+    "database": "database",
+}
 
 
 class BaseAttackModule(AttackModule):
@@ -41,6 +43,8 @@ class BaseAttackModule(AttackModule):
     owasp_id: str = ""
     atlas_technique: str | None = None
     description: str = ""
+    category: str = ""
+    default_severity: str = "high"
 
     def __init__(self) -> None:
         self._payloads: list[AttackPayload] | None = None
@@ -188,6 +192,21 @@ class BaseAttackModule(AttackModule):
                 raise ValueError(msg)
 
             merged = {**module_defaults, **entry}
+            if "messages" not in merged and "prompt" in merged:
+                merged["messages"] = [
+                    {"role": "user", "content": str(merged["prompt"])},
+                ]
+            merged.pop("prompt", None)
+            if "attack_module" not in merged:
+                merged["attack_module"] = self.name
+            if "owasp_id" not in merged:
+                merged["owasp_id"] = self.owasp_id
+            if "atlas_technique" not in merged:
+                merged["atlas_technique"] = self.atlas_technique
+            if "category" not in merged:
+                merged["category"] = self.category
+            if "severity" not in merged:
+                merged["severity"] = self.default_severity
             try:
                 payloads.append(AttackPayload(**merged))
             except ValidationError as exc:
@@ -202,9 +221,32 @@ class BaseAttackModule(AttackModule):
         payloads: list[AttackPayload],
         target_config: dict[str, Any],
     ) -> list[AttackPayload]:
-        """Default filter hook — returns all payloads unchanged.
+        """Default filter: keep payloads with satisfied tool requirements."""
+        available_tools = self._extract_available_tools(target_config)
+        if not available_tools:
+            return [p for p in payloads if p.target_tools is None]
 
-        Subclasses override for target-aware filtering (e.g. skip payloads
-        whose ``target_tools`` aren't available on the agent).
-        """
-        return list(payloads)
+        filtered: list[AttackPayload] = []
+        for payload in payloads:
+            if payload.target_tools is None:
+                filtered.append(payload)
+                continue
+            required = self._normalize_tool_names(payload.target_tools)
+            if required.issubset(available_tools):
+                filtered.append(payload)
+        return filtered
+
+    def _extract_available_tools(self, target_config: dict[str, Any]) -> frozenset[str]:
+        servers = target_config.get("mcp_servers", [])
+        if not isinstance(servers, list):
+            return frozenset()
+        return frozenset(self._normalize_tool_names(servers))
+
+    def _normalize_tool_names(self, names: list[str]) -> set[str]:
+        out: set[str] = set()
+        for name in names:
+            lowered = str(name).strip().lower()
+            if not lowered:
+                continue
+            out.add(_TOOL_ALIASES.get(lowered, lowered))
+        return out

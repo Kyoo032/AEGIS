@@ -6,7 +6,13 @@ testbed:
   model: "qwen3:4b"
   fallback_model: "qwen3:1.7b"
   context_length: 4096              # 4GB VRAM budget — do not exceed
-  model_provider: "ollama"          # ollama | huggingface | anthropic
+  model_provider: "ollama"          # legacy key: ollama | huggingface | anthropic
+  provider:
+    mode: "auto"                    # auto | ollama | huggingface | offline
+    ollama_base_url: "http://localhost:11434"
+    hf_model: "HuggingFaceH4/zephyr-7b-beta"
+    hf_token_env: "HF_TOKEN"
+    require_external: false         # true => fail if no Ollama/HF provider is available
   agent_profile: "default"          # default | hardened | minimal
   mcp_servers:
     - filesystem
@@ -15,6 +21,25 @@ testbed:
     - code_exec
   rag_enabled: true
   memory_enabled: true
+  security:
+    http_allowlist: ["localhost", "127.0.0.1", "::1"]
+    http_block_private_networks: true
+    http_max_response_bytes: 8192
+    http_timeout_seconds: 8
+    http_allow_redirects: false
+    filesystem_safe_root: "/tmp/aegis_fs"
+    filesystem_max_read_bytes: 1048576
+    filesystem_max_write_bytes: 1048576
+    database_max_rows: 1000
+    database_timeout_seconds: 2.0
+    email_max_inbox_items: 200
+    email_max_body_chars: 20000
+    memory_max_turns: 200
+    rag_max_items: 200
+    code_exec_enabled: false
+    code_exec_timeout_seconds: 3
+    code_exec_max_output_chars: 8000
+    code_exec_max_code_chars: 8000
 
 attacks:
   modules:
@@ -25,6 +50,7 @@ attacks:
     - asi06_memory_poison
     - mcp06_cmd_injection
     - llm01_prompt_inject
+    - llm02_data_disclosure
   payloads_per_module: 10
   multi_turn: true
 
