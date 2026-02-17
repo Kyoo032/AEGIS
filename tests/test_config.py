@@ -13,6 +13,7 @@ class TestLoadConfig:
         assert "defenses" in config
         assert "reporting" in config
         assert config["testbed"]["model"] == "qwen3:4b"
+        assert config["testbed"]["security"]["code_exec_enabled"] is False
 
     def test_load_missing_file_raises(self):
         from aegis.config import load_config
@@ -49,6 +50,7 @@ class TestLoadConfig:
         )
         config = load_config(str(custom))
         assert config["testbed"]["model"] == "custom"
+        assert "security" in config["testbed"]
 
     def test_load_config_accepts_path_object(self, tmp_path):
         from pathlib import Path
