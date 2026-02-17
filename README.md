@@ -9,3 +9,9 @@ uv sync --dev
 uv run pytest
 uv run aegis --help
 ```
+
+## Security Defaults (Migration Notes)
+
+- `code_exec` MCP tool is now disabled by default (`testbed.security.code_exec_enabled: false`).
+- HTTP MCP requests are strict allowlist by default (`testbed.security.http_allowlist` + private-network blocking).
+- New hardening knobs live under `testbed.security` in `aegis/config.yaml`.

@@ -5,7 +5,6 @@ and run_id generation.
 """
 from __future__ import annotations
 
-from datetime import UTC
 from pathlib import Path
 from unittest.mock import patch
 
@@ -14,7 +13,6 @@ import pytest
 from aegis.attacks.base import BaseAttackModule
 from aegis.models import AttackPayload, AttackResult, Severity
 from tests.conftest import MockAgent
-
 
 # ---------------------------------------------------------------------------
 # Concrete subclass for testing the abstract base
