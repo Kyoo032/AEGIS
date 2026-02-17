@@ -5,12 +5,9 @@ and execution with MockAgent.
 """
 from __future__ import annotations
 
-import pytest
-
 from aegis.attacks.llm01_prompt_inject import PromptInjectionModule
 from aegis.models import AttackPayload, AttackResult, Severity
 from tests.conftest import MockAgent
-
 
 # ---------------------------------------------------------------------------
 # Instantiation
@@ -43,10 +40,17 @@ class TestInstantiation:
 
 
 class TestPayloadGeneration:
-    def test_generates_five_payloads(self):
+    def test_generates_expanded_payloads(self):
         module = PromptInjectionModule()
         payloads = module.generate_payloads({})
-        assert len(payloads) == 5
+        assert len(payloads) >= 10
+
+    def test_includes_dynamic_encoded_variants(self):
+        module = PromptInjectionModule()
+        payload_ids = {p.id for p in module.generate_payloads({})}
+        assert "LLM01-DYN-B64-001" in payload_ids
+        assert "LLM01-DYN-ROT13-001" in payload_ids
+        assert "LLM01-DYN-HEX-001" in payload_ids
 
     def test_all_payloads_are_attack_payload_models(self):
         module = PromptInjectionModule()
@@ -162,4 +166,4 @@ class TestExecution:
         module.generate_payloads({})
         meta = module.get_metadata()
         assert meta["name"] == "llm01_prompt_inject"
-        assert meta["payload_count"] == 5
+        assert meta["payload_count"] >= 10
