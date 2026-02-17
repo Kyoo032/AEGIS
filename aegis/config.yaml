@@ -1,0 +1,50 @@
+# AEGIS Default Configuration
+# All tracks read from this file via aegis.config.load_config()
+# Changes require consensus from both track owners.
+
+testbed:
+  model: "qwen3:4b"
+  fallback_model: "qwen3:1.7b"
+  context_length: 4096              # 4GB VRAM budget — do not exceed
+  model_provider: "ollama"          # ollama | huggingface | anthropic
+  agent_profile: "default"          # default | hardened | minimal
+  mcp_servers:
+    - filesystem
+    - http
+    - email
+    - code_exec
+  rag_enabled: true
+  memory_enabled: true
+
+attacks:
+  modules:
+    - asi01_goal_hijack
+    - asi02_tool_misuse
+    - asi04_supply_chain
+    - asi05_code_exec
+    - asi06_memory_poison
+    - mcp06_cmd_injection
+    - llm01_prompt_inject
+  payloads_per_module: 10
+  multi_turn: true
+
+evaluation:
+  scorers:
+    - rule_based
+    - llm_judge
+  judge_model: "qwen3:1.7b"
+  confidence_threshold: 0.7
+
+defenses:
+  active: []
+  available:
+    - input_validator
+    - output_filter
+    - tool_boundary
+    - mcp_integrity
+    - permission_enforcer
+
+reporting:
+  formats: ["json", "html"]
+  output_dir: "./reports"
+  include_atlas_mapping: true

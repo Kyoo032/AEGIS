@@ -1,0 +1,67 @@
+"""Tests for aegis/config.py — load_config() function."""
+import pytest
+
+
+class TestLoadConfig:
+    def test_load_default_config(self):
+        from aegis.config import load_config
+
+        config = load_config()
+        assert "testbed" in config
+        assert "attacks" in config
+        assert "evaluation" in config
+        assert "defenses" in config
+        assert "reporting" in config
+        assert config["testbed"]["model"] == "qwen3:4b"
+
+    def test_load_missing_file_raises(self):
+        from aegis.config import load_config
+
+        with pytest.raises(FileNotFoundError):
+            load_config("/nonexistent/path/config.yaml")
+
+    def test_load_invalid_yaml_raises(self, tmp_path):
+        from aegis.config import load_config
+
+        bad_file = tmp_path / "bad.yaml"
+        bad_file.write_text("just a string, not a mapping")
+        with pytest.raises(ValueError, match="YAML mapping"):
+            load_config(str(bad_file))
+
+    def test_load_missing_required_keys_raises(self, tmp_path):
+        from aegis.config import load_config
+
+        partial = tmp_path / "partial.yaml"
+        partial.write_text("testbed:\n  model: test\n")
+        with pytest.raises(ValueError, match="missing required sections"):
+            load_config(str(partial))
+
+    def test_load_custom_config(self, tmp_path):
+        from aegis.config import load_config
+
+        custom = tmp_path / "custom.yaml"
+        custom.write_text(
+            "testbed:\n  model: custom\n"
+            "attacks:\n  modules: []\n"
+            "evaluation:\n  scorers: []\n"
+            "defenses:\n  active: []\n"
+            "reporting:\n  formats: [json]\n"
+        )
+        config = load_config(str(custom))
+        assert config["testbed"]["model"] == "custom"
+
+    def test_load_config_accepts_path_object(self, tmp_path):
+        from pathlib import Path
+
+        from aegis.config import load_config
+
+        custom = tmp_path / "path_test.yaml"
+        custom.write_text(
+            "testbed:\n  model: path-test\n"
+            "attacks:\n  modules: []\n"
+            "evaluation:\n  scorers: []\n"
+            "defenses:\n  active: []\n"
+            "reporting:\n  formats: [json]\n"
+        )
+        config = load_config(Path(custom))
+        assert config["testbed"]["model"] == "path-test"

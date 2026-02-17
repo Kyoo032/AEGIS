@@ -1,0 +1,210 @@
+"""Base attack module convenience class.
+
+Provides shared boilerplate for all AEGIS attack modules:
+YAML payload loading, payload building with module-level defaults,
+execute flow with agent reset, and metadata generation.
+
+Subclasses only need to set class attributes and optionally
+override ``_filter_payloads``.
+"""
+from __future__ import annotations
+
+import re
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any
+from uuid import uuid4
+
+import yaml
+from pydantic import ValidationError
+
+from aegis.interfaces.agent import AgentInterface
+from aegis.interfaces.attack import AttackModule
+from aegis.models import AttackPayload, AttackResult
+
+_SAFE_MODULE_NAME = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
+
+_SENTINEL = object()
+
+
+class BaseAttackModule(AttackModule):
+    """Convenience base class implementing ``AttackModule`` ABC boilerplate.
+
+    Subclasses must set:
+        name: str — module name, also used to locate the YAML file
+        owasp_id: str — OWASP category ID
+        atlas_technique: str | None — MITRE ATLAS technique ID (optional)
+        description: str — human-readable description (optional)
+    """
+
+    name: str = ""
+    owasp_id: str = ""
+    atlas_technique: str | None = None
+    description: str = ""
+
+    def __init__(self) -> None:
+        self._payloads: list[AttackPayload] | None = None
+
+    # ------------------------------------------------------------------
+    # Public API (implements AttackModule ABC)
+    # ------------------------------------------------------------------
+
+    def generate_payloads(
+        self, target_config: dict[str, Any]
+    ) -> list[AttackPayload]:
+        """Load YAML, build AttackPayload objects, filter, store & return copy."""
+        raw = self._load_payloads_from_yaml()
+        payloads = self._build_attack_payloads(raw)
+        payloads = self._filter_payloads(payloads, target_config)
+        self._payloads = list(payloads)
+        return list(self._payloads)
+
+    def execute(self, agent: AgentInterface) -> list[AttackResult]:
+        """Run all payloads against the agent, return results.
+
+        For each payload: reset agent, send payload, wrap response in
+        ``AttackResult`` with UTC timestamp and shared ``run_id``.
+
+        Raises:
+            RuntimeError: If ``generate_payloads`` has not been called yet.
+        """
+        if self._payloads is None:
+            msg = (
+                "No payloads loaded. Call generate_payloads() before execute()."
+            )
+            raise RuntimeError(msg)
+
+        if not self._payloads:
+            return []
+
+        run_id = str(uuid4())
+        results: list[AttackResult] = []
+
+        for payload in self._payloads:
+            agent.reset()
+            response = agent.run(payload)
+            result = AttackResult(
+                payload=payload,
+                response=response,
+                timestamp=datetime.now(UTC),
+                run_id=run_id,
+            )
+            results.append(result)
+
+        return results
+
+    def get_metadata(self) -> dict[str, Any]:
+        """Return module metadata for reporting."""
+        return {
+            "name": self.name,
+            "owasp_id": self.owasp_id,
+            "atlas_technique": self.atlas_technique,
+            "description": self.description,
+            "payload_count": len(self._payloads) if self._payloads else 0,
+        }
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    def _get_payload_path(self) -> Path:
+        """Resolve path to this module's YAML payload file.
+
+        Raises:
+            ValueError: If the module name would escape the payloads directory.
+        """
+        payloads_dir = Path(__file__).parent / "payloads"
+
+        if not _SAFE_MODULE_NAME.match(self.name):
+            msg = (
+                f"Invalid module name '{self.name}'. "
+                f"Must match pattern: {_SAFE_MODULE_NAME.pattern}"
+            )
+            raise ValueError(msg)
+
+        resolved = (payloads_dir / f"{self.name}.yaml").resolve()
+
+        if not resolved.is_relative_to(payloads_dir.resolve()):
+            msg = (
+                f"Invalid module name '{self.name}': "
+                f"payload path must stay within {payloads_dir}"
+            )
+            raise ValueError(msg)
+
+        return resolved
+
+    def _load_payloads_from_yaml(self) -> dict[str, Any]:
+        """Parse YAML file, validate structure, return raw dict.
+
+        Raises:
+            FileNotFoundError: If the YAML file does not exist.
+            ValueError: If required top-level keys are missing.
+        """
+        path = self._get_payload_path()
+
+        if not path.exists():
+            msg = f"Payload YAML file not found: {path}"
+            raise FileNotFoundError(msg)
+
+        with path.open("r", encoding="utf-8") as fh:
+            raw: dict[str, Any] = yaml.safe_load(fh)
+
+        if not isinstance(raw, dict):
+            msg = f"Payload YAML must be a mapping, got {type(raw).__name__}"
+            raise ValueError(msg)
+
+        if "module" not in raw:
+            msg = f"Payload YAML missing required 'module' section: {path}"
+            raise ValueError(msg)
+
+        if "payloads" not in raw:
+            msg = f"Payload YAML missing required 'payloads' section: {path}"
+            raise ValueError(msg)
+
+        return raw
+
+    def _build_attack_payloads(
+        self, raw: dict[str, Any]
+    ) -> list[AttackPayload]:
+        """Merge module-level defaults with per-payload data, build models.
+
+        Module-level fields (attack_module, owasp_id, atlas_technique,
+        category) serve as defaults; per-payload fields override them.
+
+        Raises:
+            ValueError: If payload structure is invalid or construction fails.
+        """
+        module_defaults: dict[str, Any] = dict(raw.get("module", {}))
+        raw_payloads = raw.get("payloads", [])
+
+        if not isinstance(raw_payloads, list):
+            msg = f"'payloads' must be a list, got {type(raw_payloads).__name__}"
+            raise ValueError(msg)
+
+        payloads: list[AttackPayload] = []
+        for idx, entry in enumerate(raw_payloads):
+            if not isinstance(entry, dict):
+                msg = f"Payload at index {idx} must be a mapping, got {type(entry).__name__}"
+                raise ValueError(msg)
+
+            merged = {**module_defaults, **entry}
+            try:
+                payloads.append(AttackPayload(**merged))
+            except ValidationError as exc:
+                payload_id = entry.get("id", f"index-{idx}")
+                msg = f"Invalid payload '{payload_id}' in {self.name}.yaml: {exc}"
+                raise ValueError(msg) from exc
+
+        return payloads
+
+    def _filter_payloads(
+        self,
+        payloads: list[AttackPayload],
+        target_config: dict[str, Any],
+    ) -> list[AttackPayload]:
+        """Default filter hook — returns all payloads unchanged.
+
+        Subclasses override for target-aware filtering (e.g. skip payloads
+        whose ``target_tools`` aren't available on the agent).
+        """
+        return list(payloads)

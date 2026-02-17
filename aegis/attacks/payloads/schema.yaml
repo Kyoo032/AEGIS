@@ -1,0 +1,31 @@
+# AEGIS Attack Payload YAML Schema
+#
+# Every payload YAML file must follow this structure.
+# The base class (BaseAttackModule) merges `module` defaults
+# into each payload so individual payloads don't repeat shared fields.
+#
+# module:
+#   attack_module: "module_name"       # REQUIRED — matches Python class name attribute
+#   owasp_id: "LLM01"                 # REQUIRED — OWASP LLM Top 10 / ASI category
+#   atlas_technique: "AML.T0051"      # OPTIONAL — MITRE ATLAS technique ID
+#   category: "Category Name"         # REQUIRED — human-readable category label
+#
+# payloads:
+#   - id: "ID-001"                    # REQUIRED — unique payload identifier
+#     messages:                        # REQUIRED — conversation turns
+#       - role: "user"
+#         content: "..."
+#     expected_behavior: "..."         # REQUIRED — what a successful attack looks like
+#     severity: "critical"             # REQUIRED — critical | high | medium | low
+#     injected_context: "..."          # OPTIONAL — poisoned doc/tool output
+#     target_tools:                    # OPTIONAL — MCP tools this attack targets
+#       - "tool_name"
+#     metadata:                        # OPTIONAL — freeform extra data
+#       technique: "direct_override"
+#
+# Notes:
+# - Per-payload fields override module-level defaults when both are present
+# - The `messages` list represents conversation turns sent to the agent
+# - `severity` must be one of: critical, high, medium, low
+# - `target_tools` enables filtering: payloads are skipped if the agent
+#   doesn't have the required tools available
