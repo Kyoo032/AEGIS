@@ -6,8 +6,6 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-import pytest
-
 from aegis.evaluation.scorer import RuleBasedScorer
 from aegis.interfaces.scorer import Scorer
 from aegis.models import (
@@ -18,7 +16,6 @@ from aegis.models import (
     ScoringMethod,
     Severity,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helper
