@@ -12,9 +12,10 @@
 #
 # payloads:
 #   - id: "ID-001"                    # REQUIRED — unique payload identifier
-#     messages:                        # REQUIRED — conversation turns
+#     messages:                        # REQUIRED if prompt absent — conversation turns
 #       - role: "user"
 #         content: "..."
+#     prompt: "single-turn shorthand"  # OPTIONAL shorthand (converted to one user message)
 #     expected_behavior: "..."         # REQUIRED — what a successful attack looks like
 #     severity: "critical"             # REQUIRED — critical | high | medium | low
 #     injected_context: "..."          # OPTIONAL — poisoned doc/tool output
