@@ -1,18 +1,4 @@
-"""Integration smoke test — verifies the full A -> B -> C pipeline.
-
-This test WILL FAIL on Day 1 because DefaultAgent, PromptInjectionModule,
-and RuleBasedScorer are not yet implemented. That is expected.
-
-The test will be green by Day 7 buffer day.
-"""
-import pytest
-
-
-@pytest.mark.xfail(
-    reason="DefaultAgent, PromptInjectionModule, and RuleBasedScorer not yet implemented. "
-    "Expected to pass by Day 7.",
-    strict=False,
-)
+"""Integration smoke test — verifies the full A -> B -> C pipeline."""
 def test_full_pipeline():
     """Verifies the entire A -> B -> C pipeline works end-to-end."""
     from aegis.attacks.llm01_prompt_inject import PromptInjectionModule
