@@ -102,7 +102,7 @@ injection patterns. Ready to execute once Backend Lead's agent is available Day 
 
 ### DAY 2 — Core Infrastructure
 
-#### Backend Lead — Day 2
+#### Backend Lead — Day 2 [COMPLETE]
 ```
 I'm the Backend Lead on the AEGIS project. Today is Day 2. Read claude.md for context.
 
@@ -127,7 +127,7 @@ GATE CHECK: Security Lead must be able to:
   # triggers filesystem tool and returns file contents)
 ```
 
-#### Security Lead — Day 2
+#### Security Lead — Day 2 [COMPLETE]
 ```
 I'm the Security Lead on the AEGIS project. Today is Day 2. Read claude.md for context.
 
@@ -158,7 +158,7 @@ End state: scorer evaluates mock attack results and produces valid EvaluationRes
 
 ### DAY 3 — RAG Pipeline & Evaluation
 
-#### Backend Lead — Day 3
+#### Backend Lead — Day 3 [COMPLETE]
 ```
 I'm the Backend Lead on the AEGIS project. Today is Day 3. Read claude.md for context.
 
@@ -189,7 +189,7 @@ GATE CHECK: Security Lead must be able to:
   # Evil MCP server returns poisoned tool descriptions
 ```
 
-#### Security Lead — Day 3
+#### Security Lead — Day 3 [COMPLETE]
 ```
 I'm the Security Lead on the AEGIS project. Today is Day 3. Read claude.md for context.
 
