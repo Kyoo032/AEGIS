@@ -15,6 +15,31 @@
 | 2 | Build 5 FastMCP servers using FastMCP Python SDK: **(1) Filesystem** — `read_file`, `write_file`, `list_directory`, `delete_file` in a sandboxed directory. **(2) HTTP** — `fetch_url`, `post_request`. **(3) Email** — `send_email`, `read_inbox` (mock, stores in memory). **(4) Database** — `query_db`, `insert_record` (SQLite in-memory). **(5) Code Execution** — `execute_code` (sandboxed subprocess with timeout). Implement `aegis/testbed/agent.py` with LangChain + Ollama (qwen3:4b). `run()` accepts AttackPayload, sends messages with all tools bound, captures every tool invocation as ToolCall, returns AgentResponse. Add Ollama health check. | Build `asi01_goal_hijack` module — indirect prompt injection via system prompt override, goal redirection, context manipulation. Create 8-10 YAML payloads. Build `evaluation/scorer.py` implementing Scorer interface (rule-based, using rule_detector patterns). Build `evaluation/metrics.py` — ASR computation, per-category ASR, aggregate statistics. Test against live agent once available. | **GATE:** `agent = DefaultAgent(config="test"); response = agent.run(test_payload); assert len(response.tool_calls) > 0`. Agent invokes all 5 MCP tools. Scorer produces valid EvaluationResult objects. |
 | 3 | Set up ChromaDB RAG pipeline (`rag_pipeline.py`): document ingestion (chunk, embed, store), retrieval (query → top-k relevant chunks), wire into agent when `rag_enabled=true`. Build conversation memory system (`memory_store.py`) persisting across `agent.run()` calls. Build evil MCP server (`evil_server.py`) with tool descriptions containing hidden instructions (tool poisoning). Implement `agent.inject_context()` for methods: `rag`, `memory`, `tool_output`. | Build `evaluation/llm_judge.py` — LLM-as-judge scorer using Qwen3-1.7B via Ollama. Parse judgments into EvaluationResult with confidence. Build `reporting/report_generator.py` — accepts list[EvaluationResult], produces SecurityReport model, basic Jinja2 HTML output. Build `reporting/owasp_mapper.py` and `reporting/atlas_mapper.py`. [OPTIONAL] Create first Promptfoo config for automated LLM01 testing. | **GATE:** `agent.inject_context("Ignore all instructions...", method="rag"); response = agent.run(benign_payload)` — poisoned content influences behavior. RAG returns relevant documents. Evil MCP server returns poisoned descriptions. LLM judge scores results. |
 
+### Phase 1 Runtime Validation Status (Locked)
+
+- Manual runtime validation completed on February 18-19, 2026.
+- Validated components:
+  - Ollama with `qwen3:4b` and `qwen3:1.7b`
+  - Promptfoo
+  - Garak
+  - Augustus
+- Evidence artifacts:
+  - `docs/augustus_scan_results.jsonl`
+  - `docs/augustus_scan_report.html`
+  - `docs/PROBE_CATALOG_REVIEW.md`
+  - `promptfoo_configs/llm01_basic.yaml`
+- Default policy for Day 1-3 checks: do not re-run long external probe suites if evidence artifacts are present and current.
+- Re-run long probes only when one of these trigger conditions is met:
+  - MCP server or tool behavior changed.
+  - Judge model/provider configuration changed.
+  - Payload or rule-detection logic changed in a way that impacts scanner comparability.
+  - Existing evidence artifacts are missing or stale for the branch under test.
+
+### Known Deviation (Tracked)
+
+- Day 3 RAG implementation is currently a deterministic in-memory retriever (`aegis/testbed/rag_pipeline.py`) rather than full ChromaDB + embedding storage.
+- Day 3 security gate behavior is still available through `agent.inject_context(..., method="rag")`, `evil_server`, and passing tests; treat ChromaDB parity as follow-up technical debt.
+
 ---
 
 ## Phase 2: Attack Development (Days 4–5)
