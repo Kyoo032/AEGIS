@@ -40,6 +40,13 @@ redteam = [
     { name = "pyrit" },
 ]
 
+[package.dev-dependencies]
+dev = [
+    { name = "coverage" },
+    { name = "pytest-cov" },
+    { name = "ruff" },
+]
+
 [package.metadata]
 requires-dist = [
     { name = "chromadb", specifier = ">=0.5.0" },
@@ -58,6 +65,13 @@ requires-dist = [
     { name = "typer", specifier = ">=0.12.0" },
 ]
 provides-extras = ["dev", "redteam"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "coverage", specifier = ">=7.13.4" },
+    { name = "pytest-cov", specifier = ">=7.0.0" },
+    { name = "ruff", specifier = ">=0.15.1" },
+]
 
 [[package]]
 name = "aiofiles"
@@ -4417,8 +4431,8 @@ name = "secretstorage"
 version = "3.5.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "cryptography" },
-    { name = "jeepney" },
+    { name = "cryptography", marker = "sys_platform != 'emscripten' and sys_platform != 'win32'" },
+    { name = "jeepney", marker = "sys_platform != 'emscripten' and sys_platform != 'win32'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/1c/03/e834bcd866f2f8a49a85eaff47340affa3bfa391ee9912a952a1faa68c7b/secretstorage-3.5.0.tar.gz", hash = "sha256:f04b8e4689cbce351744d5537bf6b1329c6fc68f91fa666f60a380edddcd11be", size = 19884, upload-time = "2025-11-23T19:02:53.191Z" }
 wheels = [
