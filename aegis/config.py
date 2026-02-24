@@ -66,6 +66,21 @@ _DEFAULTS: dict[str, Any] = {
                 "restrict_servers": True,
                 "security_overrides": {"code_exec_enabled": False},
             },
+            "supply_chain": {
+                "mcp_servers": [
+                    "filesystem",
+                    "http",
+                    "email",
+                    "database",
+                    "code_exec",
+                    "evil",
+                ],
+                "rag_enabled": True,
+                "memory_enabled": True,
+                "defenses_active": [],
+                "restrict_servers": True,
+                "security_overrides": {"code_exec_enabled": True},
+            },
         },
         "security": {
             "http_allowlist": ["localhost", "127.0.0.1", "::1"],
@@ -116,6 +131,46 @@ _DEFAULTS: dict[str, Any] = {
             "mcp_integrity",
             "permission_enforcer",
         ],
+        "layered_combinations": [
+            ["input_validator", "output_filter", "tool_boundary"],
+            ["mcp_integrity", "permission_enforcer"],
+            [
+                "input_validator",
+                "output_filter",
+                "tool_boundary",
+                "mcp_integrity",
+                "permission_enforcer",
+            ],
+        ],
+        "config": {
+            "tool_boundary": {
+                "strict": True,
+                "max_calls_per_run": 5,
+                "allowed_tools": [],
+                "allowed_sequences": {},
+                "param_block_patterns": [
+                    r"(?:\$\(|`|;\s*|&&|\|\|)",
+                    r"(?:\.\./|/etc/passwd|/etc/shadow)",
+                    r"(?:drop\s+table|union\s+select|;\s*select)",
+                ],
+            },
+            "mcp_integrity": {
+                "strict": True,
+                "allow_new_tools": False,
+                "verify_doc_hash": True,
+            },
+            "permission_enforcer": {
+                "mode": "standard",
+                "allowed_tools": [],
+                "tool_permissions": {},
+                "forbidden_cross_tool_flows": [
+                    {
+                        "from_tools": ["read_file", "query_db", "read_inbox"],
+                        "to_tools": ["send_email", "post_request", "fetch_url"],
+                    }
+                ],
+            },
+        },
     },
     "reporting": {
         "formats": ["json", "html"],
@@ -214,6 +269,7 @@ def _validate_nested(config: dict[str, Any], source_path: Path) -> None:
         ("evaluation.scorers", config["evaluation"].get("scorers")),
         ("defenses.active", config["defenses"].get("active")),
         ("defenses.available", config["defenses"].get("available")),
+        ("defenses.layered_combinations", config["defenses"].get("layered_combinations")),
         ("reporting.formats", config["reporting"].get("formats")),
         ("testbed.security.http_allowlist", security.get("http_allowlist")),
     )
@@ -251,4 +307,18 @@ def _validate_nested(config: dict[str, Any], source_path: Path) -> None:
         if not isinstance(security_overrides, dict):
             raise ValueError(
                 f"{source_path}: 'testbed.profiles.{name}.security_overrides' must be a mapping."
+            )
+
+    defenses = config.get("defenses")
+    if not isinstance(defenses, dict):
+        raise ValueError(f"{source_path}: 'defenses' must be a mapping.")
+
+    defense_cfg = defenses.get("config", {})
+    if not isinstance(defense_cfg, dict):
+        raise ValueError(f"{source_path}: 'defenses.config' must be a mapping.")
+
+    for idx, combo in enumerate(defenses.get("layered_combinations", [])):
+        if not isinstance(combo, list):
+            raise ValueError(
+                f"{source_path}: 'defenses.layered_combinations[{idx}]' must be a list."
             )

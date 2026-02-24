@@ -255,8 +255,16 @@ INTEGRATION CHECK: If Backend Lead has real agent running, try scoring real atta
 
 ### DAY 4 — MockAgent & Attack Expansion
 
-#### Backend Lead — Day 4
+#### Backend Lead — Day 4 [COMPLETE]
 ```
+[COMPLETED] All Day 4 Backend tasks committed:
+- MockAgent with canned responses for offline testing
+- Timeout and retry logic for LLM calls (configurable in config.yaml)
+- Agent profiles in config.yaml: "default", "hardened", "minimal"
+- Multi-turn conversation support in agent.run()
+- tests/test_testbed/test_agent.py with full MockAgent coverage
+
+Original prompt:
 I'm the Backend Lead on the AEGIS project. Today is Day 4. Read claude.md for context.
 
 Tasks:
@@ -277,8 +285,16 @@ GATE CHECK:
 - All tests in test_agent.py pass
 ```
 
-#### Security Lead — Day 4
+#### Security Lead — Day 4 [COMPLETE]
 ```
+[COMPLETED] All Day 4 Security tasks committed:
+- aegis/attacks/asi02_tool_misuse.py with payloads YAML
+- aegis/attacks/asi04_supply_chain.py with payloads YAML
+- aegis/evaluation/pipeline.py with confidence-weighted scorer resolution
+- Expanded rule_detector.py with tool misuse and supply chain patterns
+- Tests for ASI-02 and ASI-04 attack modules
+
+Original prompt:
 I'm the Security Lead on the AEGIS project. Today is Day 4. Read claude.md for context.
 
 Tasks:
@@ -307,7 +323,7 @@ GATE CHECK:
 
 ### DAY 5 — Attack Completion
 
-#### Backend Lead — Day 5
+#### Backend Lead — Day 5 [COMPLETE]
 ```
 I'm the Backend Lead on the AEGIS project. Today is Day 5. Read claude.md for context.
 
@@ -326,7 +342,7 @@ GATE CHECK:
 - All MCP server tests pass
 ```
 
-#### Security Lead — Day 5
+#### Security Lead — Day 5 [COMPLETE]
 ```
 I'm the Security Lead on the AEGIS project. Today is Day 5. Read claude.md for context.
 
@@ -363,7 +379,7 @@ GATE CHECK:
 
 ### DAY 6 — Defense Phase Start & Baseline
 
-#### Backend Lead — Day 6
+#### Backend Lead — Day 6 [COMPLETE]
 ```
 I'm the Backend Lead on the AEGIS project. Today is Day 6. Read claude.md for context.
 
@@ -390,7 +406,7 @@ GATE CHECK:
 - Both defenses toggleable without agent restart
 ```
 
-#### Security Lead — Day 6
+#### Security Lead — Day 6 [COMPLETE]
 ```
 I'm the Security Lead on the AEGIS project. Today is Day 6. Read claude.md for context.
 
@@ -418,8 +434,20 @@ GATE CHECK:
 
 ### DAY 7 — Buffer & Sync
 
-#### Everyone — Day 7
+#### Everyone — Day 7 [COMPLETE]
 ```
+[COMPLETED] Day 7 buffer/sync gates closed:
+- `pytest tests/test_integration.py` passing
+- Core-7 baseline run completed with `aegis/config.day7_core7.yaml`
+- Baseline report contains all required categories: ASI01, ASI02, ASI04, ASI05, ASI06, LLM01, MCP06
+- Day 7 artifacts generated:
+  - `reports/day7_core7_baseline_results_20260224T063137Z.jsonl`
+  - `reports/day7_core7_baseline_report_20260224T063137Z.json`
+  - `reports/day7_core7_baseline_report_20260224T063137Z.html`
+  - `reports/day7_run_manifest_20260224T063137Z.json`
+- Stretch completed: payload tuning pass for ASI02, ASI04, MCP06
+
+Original prompt:
 Today is Day 7, the buffer day. Read claude.md for context.
 
 Priority checklist:
@@ -450,8 +478,17 @@ END OF DAY: Both tracks merged to develop. Integration test green. Baseline ASR 
 
 ### DAY 8-9 — Defense Hardening
 
-#### Backend Lead — Days 8-9
+#### Backend Lead — Days 8-9 [COMPLETE]
 ```
+[COMPLETED] All Day 8-9 Backend tasks committed:
+- aegis/defenses/tool_boundary.py: allowlisting, parameter validation, rate limiting, sequence control
+- aegis/defenses/mcp_integrity.py: tool description hash verification, change detection, strict/soft modes
+- aegis/defenses/permission_enforcer.py: least-privilege enforcement, read-only scoping, cross-tool flow blocking
+- All 5 defenses implement apply(), remove(), inspect()
+- tests/test_defenses/ with tests for all 5 defenses
+- Defenses layerable (multiple active simultaneously)
+
+Original prompt:
 I'm the Backend Lead on the AEGIS project. Today is Day [8/9]. Read claude.md for context.
 
 Day 8:
@@ -483,8 +520,16 @@ GATE CHECK (end of Day 9):
 - All defense tests pass
 ```
 
-#### Security Lead — Days 8-9
+#### Security Lead — Days 8-9 [COMPLETE]
 ```
+[COMPLETED] All Day 8-9 Security tasks committed:
+- Full attack-defense matrix: 7 attacks × 5 defenses + baseline + 3 layered combos
+- 14 matrix artifacts in reports/day89_defense_matrix_*.json
+- Named single-defense and layered reports generated
+- docs/DEFENSE_EVALUATION.md complete with ASR table, bypass techniques, layered findings
+- ASR delta calculated for each defense configuration
+
+Original prompt:
 I'm the Security Lead on the AEGIS project. Today is Day [8/9]. Read claude.md for context.
 
 Day 8:
@@ -516,8 +561,16 @@ GATE CHECK (end of Day 9):
 
 ### DAY 10 — Orchestrator & Reports
 
-#### Backend Lead — Day 10
+#### Backend Lead — Day 10 [COMPLETE]
 ```
+[COMPLETED] All Day 10 Backend tasks committed:
+- aegis/orchestrator.py: run_baseline(), run_with_defense(), run_full_matrix(), run_with_defenses()
+- aegis/cli.py: scan, attack, defend, report, matrix commands with exit codes 0/1/2
+- schemas/security_report.schema.json and schemas/matrix_summary.schema.json
+- scripts/validate_reports.py with jsonschema validation
+- reports/ populated with baseline and matrix artifacts
+
+Original prompt:
 I'm the Backend Lead on the AEGIS project. Today is Day 10. Read claude.md for context.
 
 Tasks:
@@ -537,10 +590,29 @@ GATE CHECK:
 - orchestrator.run_full_matrix() produces dict[str, SecurityReport] with baseline + all defenses
 - CLI: `aegis scan`, `aegis attack --module asi01`, `aegis defend --defense input_validator` all work
 - Reports generate from real data (not mocks)
+
+COMPLETION VALIDATION (REQUIRED BEFORE MARKING DAY 10 COMPLETE):
+- Run:
+  `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/bin/pytest tests/test_orchestrator.py tests/test_cli.py tests/test_reporting/test_report_generator.py tests/test_reporting/test_schemas.py -q`
+- Run:
+  `.venv/bin/python -m aegis.cli matrix -c aegis/config.day7_core7.yaml -f json -o ./reports`
+- Confirm latest `reports/day89_defense_matrix_*.json` contains:
+  `scenarios`, top-level `errors`, and per-scenario `probe_results`.
+- Validate artifacts:
+  `.venv/bin/python scripts/validate_reports.py --schema matrix --input "reports/day89_defense_matrix_*.json"`
+  `.venv/bin/python scripts/validate_reports.py --schema report --input "reports/baseline.json"`
+- Confirm `docs/FINDINGS.md` references the newest matrix artifact timestamp and not stale files.
 ```
 
-#### Security Lead — Day 10
+#### Security Lead — Day 10 [COMPLETE]
 ```
+[COMPLETED] All Day 10 Security tasks committed:
+- report.html.j2 with all sections: Executive Summary, Methodology, Severity Definitions,
+  Findings Summary, Defense Evaluation Matrix, Detailed Findings, Appendix
+- report_generator.py with defense comparison support and delta_vs_baseline calculation
+- docs/FINDINGS.md with ASR tables, baseline vs defended comparison, key findings
+
+Original prompt:
 I'm the Security Lead on the AEGIS project. Today is Day 10. Read claude.md for context.
 
 Tasks:
@@ -556,6 +628,14 @@ GATE CHECK:
 - HTML report includes defense comparison table with ASR deltas
 - PDF generation produces readable output
 - docs/FINDINGS.md has initial data tables
+
+COMPLETION VALIDATION (REQUIRED BEFORE MARKING DAY 10 COMPLETE):
+- Confirm report sections render in HTML:
+  Executive Summary, Methodology, Severity Definitions, Findings Summary,
+  Defense Evaluation Matrix, Detailed Findings, Appendix.
+- Confirm each finding includes OWASP mapping fields in JSON:
+  `owasp_id`, `owasp_category`, `severity`, `owasp_mapping`.
+- Confirm matrix `errors` is reviewed (even when empty) and documented in findings notes.
 ```
 
 ---
@@ -564,8 +644,15 @@ GATE CHECK:
 
 ### DAY 11-13 — Publication Phase
 
-#### Backend Lead — Days 11-13
+#### Backend Lead — Days 11-13 [COMPLETE through Day 11]
 ```
+[COMPLETED Day 11] CLI fully functional:
+- All 5 commands: scan, attack, defend, report, matrix
+- Error handling: invalid module/defense prints available options, exits code 1
+- Exit codes: 0 (clean), 1 (tool/config error), 2 (vulnerabilities found)
+- Schema validation passes for matrix and baseline report artifacts
+
+Original prompt:
 I'm the Backend Lead on the AEGIS project. Today is Day [11/12/13]. Read claude.md for context.
 
 Day 11:
@@ -575,6 +662,14 @@ Day 11:
   - `aegis defend --defense input_validator` — run with defense
   - `aegis report --format html --output ./reports/` — generate report
   - `aegis matrix` — run full attack-defense matrix
+
+Day 11 completion validation (before marking complete):
+- Verify CLI behaviors (success + failure paths):
+  - `aegis attack --module <invalid>` prints available modules and exits non-zero.
+  - `aegis defend --defense <invalid>` prints available defenses and exits non-zero.
+  - Exit codes follow policy: `0` clean, `1` tool/config error, `2` vulnerabilities found.
+- Verify `aegis report --format json` and `--format html` both produce output files.
+- Verify schema validation passes for latest matrix and baseline report artifacts.
 
 Day 12:
 - Create .github/workflows/ci.yml — run pytest on push to develop/main
@@ -598,13 +693,28 @@ GATE CHECK (end of Day 13):
 - `ruff check aegis/` returns clean
 ```
 
-#### Security Lead — Days 11-13
+#### Security Lead — Days 11-13 [COMPLETE through Day 11]
 ```
+[COMPLETED Day 11] Documentation complete:
+- docs/FINDINGS.md: ASR per category, baseline vs defended, 3 key findings with OWASP mapping
+- docs/METHODOLOGY.md: framework alignment, attack coverage mapping, scoring methodology,
+  severity classification, defense evaluation method, reproducibility, limitations
+
+Original prompt:
 I'm the Security Lead on the AEGIS project. Today is Day [11/12/13]. Read claude.md for context.
 
 Day 11:
 - Complete docs/FINDINGS.md — ASR per category, baseline vs defended, attack technique writeups
 - Complete docs/METHODOLOGY.md — research approach, threat model, test environment description
+
+Day 11 completion validation (before marking complete):
+- `docs/FINDINGS.md` includes:
+  Assessment Overview, Baseline Results Summary, Defense Effectiveness Summary,
+  Key Findings, Weakest Areas, Prioritized Recommendations, Data Sources.
+- `docs/METHODOLOGY.md` includes:
+  Framework Alignment, Attack Coverage Mapping, Scoring Methodology,
+  Severity Classification, Defense Evaluation Method, Reproducibility, Limitations.
+- Data source paths in docs must point to latest generated artifacts.
 
 Day 12:
 - Complete docs/DEFENSE_EVALUATION.md — defense comparison analysis, bypass techniques

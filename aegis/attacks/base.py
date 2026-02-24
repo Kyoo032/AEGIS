@@ -45,6 +45,8 @@ class BaseAttackModule(AttackModule):
     description: str = ""
     category: str = ""
     default_severity: str = "high"
+    supports_multi_turn: bool = False
+    max_turns: int = 1
 
     def __init__(self) -> None:
         self._payloads: list[AttackPayload] | None = None
@@ -86,7 +88,8 @@ class BaseAttackModule(AttackModule):
 
         for payload in self._payloads:
             agent.reset()
-            response = agent.run(payload)
+            payload_for_run = self._prepare_payload_for_run(payload, agent)
+            response = agent.run(payload_for_run)
             result = AttackResult(
                 payload=payload,
                 response=response,
@@ -102,9 +105,13 @@ class BaseAttackModule(AttackModule):
         return {
             "name": self.name,
             "owasp_id": self.owasp_id,
+            "owasp_category": self.category,
             "atlas_technique": self.atlas_technique,
+            "mitre_atlas_id": self.atlas_technique,
             "description": self.description,
             "payload_count": len(self._payloads) if self._payloads else 0,
+            "supports_multi_turn": self.supports_multi_turn,
+            "max_turns": self.max_turns,
         }
 
     # ------------------------------------------------------------------
@@ -250,3 +257,22 @@ class BaseAttackModule(AttackModule):
                 continue
             out.add(_TOOL_ALIASES.get(lowered, lowered))
         return out
+
+    def _prepare_payload_for_run(
+        self,
+        payload: AttackPayload,
+        agent: AgentInterface,
+    ) -> AttackPayload:
+        """Inject context through the requested method before agent.run()."""
+        context = payload.injected_context
+        if not context:
+            return payload
+
+        metadata = payload.metadata if isinstance(payload.metadata, dict) else {}
+        method_raw = metadata.get("injection_method", "rag")
+        method = str(method_raw).strip().lower()
+        if method not in {"rag", "memory", "tool_output"}:
+            method = "rag"
+
+        agent.inject_context(context, method=method)
+        return payload.model_copy(update={"injected_context": None})

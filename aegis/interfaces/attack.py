@@ -15,6 +15,8 @@ class AttackModule(ABC):
     owasp_id: str
     atlas_technique: str | None = None
     description: str = ""
+    supports_multi_turn: bool = False
+    max_turns: int = 1
 
     @abstractmethod
     def generate_payloads(self, target_config: dict[str, Any]) -> list[AttackPayload]:

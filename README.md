@@ -20,19 +20,38 @@ AEGIS is tuned for local-first runs using these two models as the reference setu
 
 ## Validation Policy
 
-- Day 1-3 runtime validation was completed manually on February 18-19, 2026.
+- Day 1-4 runtime validation was completed manually on February 18-19, 2026.
 - Verified components: Ollama models `qwen3:4b` and `qwen3:1.7b`, plus Promptfoo, Garak, and Augustus.
 - Baseline evidence:
   - `docs/augustus_scan_results.jsonl`
   - `docs/augustus_scan_report.html`
   - `docs/PROBE_CATALOG_REVIEW.md`
   - `promptfoo_configs/llm01_basic.yaml`
-- Default policy: avoid re-running long external probe suites for routine Day 1-3 checks.
+- Default policy: avoid re-running long external probe suites for routine Day 1-4 checks.
 - Re-run long probes only when one of these conditions is true:
   - MCP server or tool behavior changed.
   - Judge model/provider configuration changed.
   - Payload or rule-detection logic changed in a way that affects probe comparability.
   - Existing evidence artifacts are missing or stale for the target branch.
+
+## Agent Profiles
+
+Four preconfigured profiles in `config.yaml`:
+
+| Profile | Tools | RAG/Memory | Use case |
+|---------|-------|------------|----------|
+| `default` | All 6 MCP servers | Enabled | Baseline vulnerability testing |
+| `hardened` | Restricted set | Disabled | Defense evaluation |
+| `minimal` | Filesystem only | Disabled | Isolated attack testing |
+| `supply_chain` | Includes `evil` MCP server | Enabled | Day 5 supply chain/poisoning validation |
+
+```bash
+uv run aegis scan --profile minimal
+```
+
+## MockAgent (Offline Testing)
+
+`MockAgent` implements `AgentInterface` with canned responses for deterministic offline testing — no Ollama required. Useful for CI and unit tests.
 
 ## Security Defaults (Migration Notes)
 

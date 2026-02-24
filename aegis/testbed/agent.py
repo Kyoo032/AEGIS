@@ -15,6 +15,11 @@ from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
 from aegis.config import load_config
+from aegis.defenses.input_validator import InputValidatorDefense
+from aegis.defenses.mcp_integrity import MCPIntegrityDefense, build_tool_manifest
+from aegis.defenses.output_filter import OutputFilterDefense
+from aegis.defenses.permission_enforcer import PermissionEnforcerDefense
+from aegis.defenses.tool_boundary import ToolBoundaryDefense
 from aegis.interfaces.agent import AgentInterface
 from aegis.models import AgentResponse, AttackPayload, ToolCall
 from aegis.testbed.mcp_servers import load_tool_registry
@@ -49,6 +54,7 @@ class DefaultAgent(AgentInterface):
     """Default local agent with MCP tool execution and provider fallbacks."""
 
     def __init__(self, config: str | dict[str, Any] | None = None) -> None:
+        self._defense_defaults: dict[str, dict[str, Any]] = {}
         self._config, profile_defenses = self._resolve_testbed_config(config)
         self._security = dict(self._config.get("security", {}))
         self._memory_max_turns = max(1, int(self._security.get("memory_max_turns", 200)))
@@ -86,9 +92,45 @@ class DefaultAgent(AgentInterface):
             self._trim_rag()
 
         message_history = [dict(m) for m in payload.messages]
+        blocked, blocking_defense, block_reason = self._inspect_pre_run(payload)
+        if not blocked:
+            blocked, blocking_defense, block_reason = self._inspect_input(payload)
+        if blocked:
+            blocked_by = blocking_defense or "defense"
+            final_output = f"Request blocked by {blocked_by}: {block_reason}"
+            message_history.append({"role": "assistant", "content": final_output})
+            if self._config.get("memory_enabled", True):
+                self._memory.extend(message_history[-2:])
+                self._trim_memory()
+
+            duration_ms = int((time.perf_counter() - start) * 1000)
+            memory_state: dict[str, Any] | None = None
+            if self._config.get("memory_enabled", True):
+                memory_state = {"turns": list(self._memory)}
+
+            return AgentResponse(
+                payload_id=payload.id,
+                agent_profile=str(self._config.get("agent_profile", "default")),
+                messages=message_history,
+                final_output=final_output,
+                tool_calls=[],
+                memory_state=memory_state,
+                raw_llm_output=None,
+                error=block_reason,
+                duration_ms=duration_ms,
+                defense_active=self._active_defense_name(),
+            )
+
         tool_calls = self._execute_tools(payload)
 
         final_output, raw_llm_output, error = self._generate_output(payload, tool_calls)
+        final_output, output_reasons = self._apply_output_defenses(final_output)
+        if output_reasons:
+            joined = "; ".join(output_reasons)
+            if error:
+                error = f"{error}; {joined}"
+            else:
+                error = joined
         assistant_message = {"role": "assistant", "content": final_output}
         message_history.append(assistant_message)
 
@@ -122,23 +164,32 @@ class DefaultAgent(AgentInterface):
         )
 
     def reset(self) -> None:
+        """Clear memory, injected context, and pending synthetic tool output."""
         self._memory.clear()
         self._injected_rag.clear()
         self._pending_tool_output = None
 
     def get_config(self) -> dict[str, Any]:
+        """Return current agent configuration plus selected provider metadata."""
         out = dict(self._config)
         out["provider_selected"] = self._provider_name
         out["provider_note"] = self._provider_note
         return out
 
     def enable_defense(self, defense_name: str, config: dict[str, Any]) -> None:
-        self._defenses[defense_name] = dict(config)
+        """Enable a named defense using caller-supplied config."""
+        defaults = self._default_defense_config(defense_name)
+        merged = self._merge_nested_dicts(defaults, dict(config))
+        if defense_name == "mcp_integrity":
+            merged.setdefault("baseline_manifest", self._tool_manifest())
+        self._defenses[defense_name] = merged
 
     def disable_defense(self, defense_name: str) -> None:
+        """Disable a defense if present."""
         self._defenses.pop(defense_name, None)
 
     def inject_context(self, context: str, method: str) -> None:
+        """Inject attacker-controlled context into one of three testbed channels."""
         if method == "rag":
             self._injected_rag.append(context)
             self._trim_rag()
@@ -152,6 +203,49 @@ class DefaultAgent(AgentInterface):
             return
         raise ValueError("method must be one of 'rag' | 'memory' | 'tool_output'")
 
+    def health_check(self) -> dict[str, Any]:
+        """Report provider, model, and MCP server connectivity health."""
+        provider_cfg = self._config.get("provider", {})
+        provider_mode = str(provider_cfg.get("mode", self._config.get("model_provider", "auto")))
+        ollama_ok, ollama_note = self._check_ollama_health()
+
+        if provider_mode in {"auto", "huggingface"}:
+            hf_ok, hf_note = self._check_hf_token(provider_cfg)
+        else:
+            hf_ok, hf_note = False, f"skipped for provider mode '{provider_mode}'"
+
+        server_checks: dict[str, dict[str, Any]] = {}
+        for server_name in self._configured_servers():
+            try:
+                tools = load_tool_registry([server_name], security_config=self._security)
+                tool_names = sorted(tools.keys())
+                ok = len(tool_names) > 0
+                note = "tool registry loaded" if ok else "no tools loaded for server"
+            except Exception as exc:
+                ok = False
+                tool_names = []
+                note = str(exc)
+
+            server_checks[server_name] = {
+                "ok": ok,
+                "tool_count": len(tool_names),
+                "tools": tool_names,
+                "note": note,
+            }
+
+        mcp_ok = all(item["ok"] for item in server_checks.values()) if server_checks else True
+        return {
+            "provider": {
+                "mode": provider_mode,
+                "selected": self._provider_name,
+                "selected_note": self._provider_note,
+                "ollama": {"ok": ollama_ok, "note": ollama_note},
+                "huggingface": {"ok": hf_ok, "note": hf_note},
+            },
+            "model": str(self._config.get("model", "qwen3:4b")),
+            "mcp": {"ok": mcp_ok, "servers": server_checks},
+        }
+
     # ------------------------------------------------------------------
     # Configuration helpers
     # ------------------------------------------------------------------
@@ -160,6 +254,13 @@ class DefaultAgent(AgentInterface):
         self, config: str | dict[str, Any] | None
     ) -> tuple[dict[str, Any], list[str]]:
         loaded = load_config()
+        defense_defaults = loaded.get("defenses", {}).get("config", {})
+        if isinstance(defense_defaults, dict):
+            self._defense_defaults = {
+                str(name): dict(value)
+                for name, value in defense_defaults.items()
+                if isinstance(value, dict)
+            }
         testbed_cfg = dict(loaded["testbed"])
 
         if isinstance(config, dict):
@@ -264,6 +365,13 @@ class DefaultAgent(AgentInterface):
             allowlist.append(host)
         security_cfg["http_allowlist"] = allowlist
 
+    def _default_defense_config(self, defense_name: str) -> dict[str, Any]:
+        candidate = self._defense_defaults.get(defense_name, {})
+        return dict(candidate) if isinstance(candidate, dict) else {}
+
+    def _tool_manifest(self) -> dict[str, str]:
+        return build_tool_manifest(self._tool_registry)
+
     def _trim_memory(self) -> None:
         if len(self._memory) > self._memory_max_turns:
             self._memory = self._memory[-self._memory_max_turns :]
@@ -361,10 +469,25 @@ class DefaultAgent(AgentInterface):
     def _execute_tools_offline(self, payload: AttackPayload) -> list[ToolCall]:
         tool_calls: list[ToolCall] = []
         plans = self._tool_plans(payload)
+        run_state: dict[str, Any] = {"tool_history": [], "tool_call_count": 0}
 
         for tool_name, args in plans:
+            blocked, blocked_by, blocked_reason = self._inspect_tool_call(tool_name, args, run_state)
             tool_fn = self._tool_registry.get(tool_name)
             if tool_fn is None:
+                run_state["tool_call_count"] += 1
+                continue
+            if blocked:
+                result_str = f"Tool blocked by {blocked_by}: {blocked_reason}"
+                tool_calls.append(
+                    ToolCall(
+                        tool_name=tool_name,
+                        parameters=args,
+                        result=result_str,
+                        timestamp=datetime.now(UTC),
+                    )
+                )
+                run_state["tool_call_count"] += 1
                 continue
             try:
                 result_obj = tool_fn(**args)
@@ -379,6 +502,8 @@ class DefaultAgent(AgentInterface):
                     timestamp=datetime.now(UTC),
                 )
             )
+            run_state["tool_history"].append(tool_name)
+            run_state["tool_call_count"] += 1
         self._append_injected_tool_output(tool_calls)
         return tool_calls
 
@@ -404,6 +529,7 @@ class DefaultAgent(AgentInterface):
         messages = self._build_chat_messages(payload)
 
         tool_calls: list[ToolCall] = []
+        run_state: dict[str, Any] = {"tool_history": [], "tool_call_count": 0}
         for _ in range(_MAX_TOOL_ITERATIONS):
             ai_message = model_with_tools.invoke(messages)
             messages.append(ai_message)
@@ -414,8 +540,25 @@ class DefaultAgent(AgentInterface):
             for tc in ai_message.tool_calls:
                 name = tc["name"]
                 args = tc.get("args", {})
+                blocked, blocked_by, blocked_reason = self._inspect_tool_call(name, args, run_state)
                 tool = tool_map.get(name)
                 if tool is None:
+                    run_state["tool_call_count"] += 1
+                    continue
+                if blocked:
+                    result_str = f"Tool blocked by {blocked_by}: {blocked_reason}"
+                    tool_calls.append(
+                        ToolCall(
+                            tool_name=name,
+                            parameters=args,
+                            result=result_str,
+                            timestamp=datetime.now(UTC),
+                        )
+                    )
+                    messages.append(
+                        ToolMessage(content=result_str, tool_call_id=tc.get("id", name))
+                    )
+                    run_state["tool_call_count"] += 1
                     continue
                 try:
                     result = tool.invoke(args)
@@ -433,6 +576,8 @@ class DefaultAgent(AgentInterface):
                 messages.append(
                     ToolMessage(content=result_str, tool_call_id=tc.get("id", name))
                 )
+                run_state["tool_history"].append(name)
+                run_state["tool_call_count"] += 1
 
         self._append_injected_tool_output(tool_calls)
         return tool_calls
@@ -678,6 +823,153 @@ class DefaultAgent(AgentInterface):
             return json.dumps(value, ensure_ascii=True, default=str)
         except TypeError:
             return str(value)
+
+    def _enabled_defenses(self) -> list[tuple[str, dict[str, Any]]]:
+        return [(name, cfg) for name, cfg in sorted(self._defenses.items())]
+
+    def _build_defense(self, defense_name: str, config: dict[str, Any]) -> Any | None:
+        if defense_name == "input_validator":
+            return InputValidatorDefense(
+                strict=bool(config.get("strict", False)),
+                max_input_chars=int(config.get("max_input_chars", 8_000)),
+            )
+        if defense_name == "output_filter":
+            return OutputFilterDefense(block_on_match=bool(config.get("block_on_match", True)))
+        if defense_name == "tool_boundary":
+            return ToolBoundaryDefense(
+                strict=bool(config.get("strict", True)),
+                max_calls_per_run=int(config.get("max_calls_per_run", 5)),
+                allowed_tools=list(config.get("allowed_tools") or []),
+                allowed_sequences=dict(config.get("allowed_sequences") or {}),
+                param_block_patterns=list(config.get("param_block_patterns") or []),
+            )
+        if defense_name == "mcp_integrity":
+            return MCPIntegrityDefense(
+                strict=bool(config.get("strict", True)),
+                allow_new_tools=bool(config.get("allow_new_tools", False)),
+                verify_doc_hash=bool(config.get("verify_doc_hash", True)),
+            )
+        if defense_name == "permission_enforcer":
+            return PermissionEnforcerDefense(
+                mode=str(config.get("mode", "standard")),
+                allowed_tools=list(config.get("allowed_tools") or []),
+                tool_permissions=dict(config.get("tool_permissions") or {}),
+                forbidden_cross_tool_flows=list(config.get("forbidden_cross_tool_flows") or []),
+            )
+        return None
+
+    def _inspect_pre_run(self, payload: AttackPayload) -> tuple[bool, str | None, str]:
+        _ = payload
+        current_manifest = self._tool_manifest()
+        for defense_name, config in self._enabled_defenses():
+            if defense_name != "mcp_integrity":
+                continue
+            defense = self._build_defense(defense_name, config)
+            if defense is None:
+                continue
+            baseline_manifest = config.get("baseline_manifest")
+            if not isinstance(baseline_manifest, dict):
+                baseline_manifest = current_manifest
+                config["baseline_manifest"] = baseline_manifest
+            blocked, reason = defense.inspect(
+                {
+                    "event": "manifest_check",
+                    "baseline_manifest": baseline_manifest,
+                    "current_manifest": current_manifest,
+                }
+            )
+            if blocked:
+                return True, defense_name, reason
+        return False, None, ""
+
+    def _inspect_input(self, payload: AttackPayload) -> tuple[bool, str | None, str]:
+        candidate = self._latest_user_message(payload)
+        for defense_name, config in self._enabled_defenses():
+            if defense_name not in {"input_validator", "tool_boundary"}:
+                continue
+            defense = self._build_defense(defense_name, config)
+            if defense is None:
+                continue
+            if defense_name == "input_validator":
+                blocked, reason = defense.inspect(candidate)
+            else:
+                blocked, reason = defense.inspect({"event": "input", "text": candidate})
+            if blocked:
+                return True, defense_name, reason
+        return False, None, ""
+
+    def _inspect_tool_call(
+        self,
+        tool_name: str,
+        args: dict[str, Any],
+        run_state: dict[str, Any],
+    ) -> tuple[bool, str | None, str]:
+        tool_history = list(run_state.get("tool_history", []))
+        previous_tool = tool_history[-1] if tool_history else None
+        next_count = int(run_state.get("tool_call_count", 0)) + 1
+        current_manifest = self._tool_manifest()
+
+        for defense_name, config in self._enabled_defenses():
+            if defense_name not in {"tool_boundary", "permission_enforcer", "mcp_integrity"}:
+                continue
+            defense = self._build_defense(defense_name, config)
+            if defense is None:
+                continue
+            if defense_name == "mcp_integrity":
+                baseline_manifest = config.get("baseline_manifest")
+                if not isinstance(baseline_manifest, dict):
+                    baseline_manifest = current_manifest
+                    config["baseline_manifest"] = baseline_manifest
+                blocked, reason = defense.inspect(
+                    {
+                        "event": "manifest_check",
+                        "baseline_manifest": baseline_manifest,
+                        "current_manifest": current_manifest,
+                    }
+                )
+            else:
+                blocked, reason = defense.inspect(
+                    {
+                        "event": "tool_call",
+                        "tool_name": tool_name,
+                        "parameters": args,
+                        "previous_tool": previous_tool,
+                        "tool_history": tool_history,
+                        "tool_call_count": next_count,
+                    }
+                )
+            if blocked:
+                return True, defense_name, reason
+        return False, None, ""
+
+    def _latest_user_message(self, payload: AttackPayload) -> str:
+        for message in reversed(payload.messages):
+            if str(message.get("role", "user")) == "user":
+                return str(message.get("content", ""))
+
+        if payload.messages:
+            return str(payload.messages[-1].get("content", ""))
+        return ""
+
+    def _apply_output_defenses(self, output: str) -> tuple[str, list[str]]:
+        current = output
+        reasons: list[str] = []
+        for defense_name, config in self._enabled_defenses():
+            if defense_name != "output_filter":
+                continue
+            defense = self._build_defense(defense_name, config)
+            if defense is None:
+                continue
+            if defense_name == "output_filter":
+                block_on_match = bool(config.get("block_on_match", True))
+                blocked, reason = defense.inspect(current)
+                if not blocked:
+                    continue
+                reasons.append(reason)
+                if block_on_match:
+                    return "Response blocked by output_filter.", reasons
+                current = defense.sanitize(current)
+        return current, reasons
 
     def _active_defense_name(self) -> str | None:
         if not self._defenses:

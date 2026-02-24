@@ -49,6 +49,13 @@ testbed:
       defenses_active: []
       restrict_servers: true
       security_overrides: { code_exec_enabled: false }
+    supply_chain:
+      mcp_servers: [filesystem, http, email, database, code_exec, evil]
+      rag_enabled: true
+      memory_enabled: true
+      defenses_active: []
+      restrict_servers: true
+      security_overrides: { code_exec_enabled: true }
   security:
     http_allowlist: ["localhost", "127.0.0.1", "::1"]
     http_block_private_networks: true
@@ -97,6 +104,31 @@ defenses:
     - tool_boundary
     - mcp_integrity
     - permission_enforcer
+  layered_combinations:
+    - [input_validator, output_filter, tool_boundary]
+    - [mcp_integrity, permission_enforcer]
+    - [input_validator, output_filter, tool_boundary, mcp_integrity, permission_enforcer]
+  config:
+    tool_boundary:
+      strict: true
+      max_calls_per_run: 5
+      allowed_tools: []
+      allowed_sequences: {}
+      param_block_patterns:
+        - "(?:\\$\\(|`|;\\s*|&&|\\|\\|)"
+        - "(?:\\.\\./|/etc/passwd|/etc/shadow)"
+        - "(?:drop\\s+table|union\\s+select|;\\s*select)"
+    mcp_integrity:
+      strict: true
+      allow_new_tools: false
+      verify_doc_hash: true
+    permission_enforcer:
+      mode: "standard"
+      allowed_tools: []
+      tool_permissions: {}
+      forbidden_cross_tool_flows:
+        - from_tools: [read_file, query_db, read_inbox]
+          to_tools: [send_email, post_request, fetch_url]
 
 reporting:
   formats: ["json", "html"]
