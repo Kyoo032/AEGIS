@@ -51,6 +51,30 @@
 | 4 | Create MockAgent (implements AgentInterface) with canned responses for offline testing. Implement timeout and retry logic for LLM calls (configurable in config.yaml). Build agent profiles: "default" (all tools, no defenses), "hardened" (restricted tools, input validation), "minimal" (filesystem only, no RAG/memory). Add multi-turn conversation support to `agent.run()`. Fix any testbed issues from Day 3. | Build `asi02_tool_misuse` module — tool chaining exploits ("read password file then email it"), parameter injection. Create YAML payloads. Build `asi04_supply_chain` module — tests evil MCP server, verifies if agent follows hidden instructions in tool descriptions. Build `evaluation/pipeline.py` — runs all configured scorers, handles disagreements with confidence-weighted resolution. Expand `rule_detector.py` for tool misuse and supply chain patterns. | MockAgent returns canned responses. 4 attack modules (LLM01, ASI01, ASI02, ASI04) produce valid AttackResult objects. Evaluation pipeline resolves multi-scorer results. |
 | 5 | Wire agent with evil_server for supply chain testing. Complete `inject_context()` — all three methods (rag, memory, tool_output) verified working. Add agent health checks (Ollama availability, MCP server connectivity). Begin `defenses/input_validator.py` skeleton — basic pattern matching. Document testbed API (docstrings, type hints on all public methods). | Build `asi05_code_exec` module — prompt-to-RCE through code execution MCP server, inject malicious code via poisoned context. Build `asi06_memory_poison` module — persistent malicious instructions in agent memory, cross-turn survival, cross-session corruption. Build `mcp06_cmd_injection` module — OS command injection through tool parameters, SQL injection through database server, path traversal through filesystem server. Create YAML payloads for all three. Run all 5 existing modules against live agent. | All 7 core attack modules built and tested. `inject_context()` works for all 3 methods. Evil server wired into agent. |
 
+### Day 5 Completion Status (Locked)
+
+- Backend and security Day 5 tracks are complete.
+- Validation criteria met: `inject_context()` supports `rag`, `memory`, and `tool_output`; evil MCP coverage present; health-check API reports provider/model/MCP connectivity.
+- Evidence artifacts are generated under `reports/` and documented in Day 5 run notes in `docs/`.
+
+### Day 6 Completion Status (Locked)
+
+- Day 6 backend and security tracks are complete.
+- Day 1-5 quick debug pass completed before Day 6 baseline:
+  - Profile/config/module loading checks passed (including `default`, `hardened`, `minimal`, `supply_chain`).
+  - Smoke suite result: `32 passed in 1.38s`.
+- Day 6 baseline evidence (fresh run timestamp: `20260224T061357Z`) is generated and documented:
+  - Manifest: `reports/day6_run_manifest_20260224T061357Z.json`
+  - Run notes: `docs/DAY6_BASELINE_RUN.md`
+  - Core-7 baseline report: `reports/day6_core7_baseline_report_20260224T061357Z.json` and `.html`
+  - Extended baseline report: `reports/day6_extended_baseline_report_20260224T061357Z.json` and `.html`
+- Day 6 gate checks satisfied:
+  - `input_validator` and `output_filter` are implemented and toggleable through `enable_defense()` / `disable_defense()`.
+  - `input_validator.inspect("ignore previous instructions") -> (True, "injection detected")`.
+  - `input_validator.inspect("what's the weather?") -> (False, "")`.
+  - Core-7 baseline ASR collected with results for all 7 required OWASP categories.
+  - HTML report template `aegis/reporting/templates/report.html.j2` renders with real baseline data.
+
 ---
 
 ## Phase 3: Defense & Baseline (Days 6–7)

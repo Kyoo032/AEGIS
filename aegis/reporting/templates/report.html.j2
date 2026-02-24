@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AEGIS Security Report {{ report.report_id }}</title>
+  <style>
+    :root {
+      --bg: #f4f7fb;
+      --panel: #ffffff;
+      --ink: #102a43;
+      --muted: #627d98;
+      --line: #d9e2ec;
+      --critical: #b42318;
+      --high: #d97706;
+      --medium: #b08900;
+      --low: #1d4ed8;
+      --info: #6b7280;
+    }
+    body {
+      margin: 0;
+      background: linear-gradient(180deg, #eef5ff 0%, var(--bg) 100%);
+      color: var(--ink);
+      font-family: "Segoe UI", Tahoma, sans-serif;
+    }
+    .wrap {
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: 28px 16px 40px;
+    }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 18px;
+      margin-bottom: 14px;
+      box-shadow: 0 8px 30px rgba(16, 42, 67, 0.06);
+    }
+    h1, h2 {
+      margin: 0 0 10px;
+    }
+    .meta {
+      color: var(--muted);
+      margin: 0 0 4px;
+      font-size: 13px;
+    }
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 10px;
+    }
+    .kpi {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px;
+      background: #fbfdff;
+    }
+    .kpi .label {
+      color: var(--muted);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
+    .kpi .value {
+      font-size: 23px;
+      font-weight: 700;
+      margin-top: 2px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      overflow: hidden;
+      background: #fff;
+    }
+    th, td {
+      border-bottom: 1px solid var(--line);
+      padding: 10px;
+      text-align: left;
+      font-size: 14px;
+      vertical-align: top;
+    }
+    th {
+      background: #f8fafc;
+      color: #334e68;
+      font-weight: 700;
+    }
+    tr:last-child td {
+      border-bottom: 0;
+    }
+    .badge {
+      border-radius: 999px;
+      display: inline-block;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 2px 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+    .sev-critical { background: #fee2e2; color: var(--critical); }
+    .sev-high { background: #ffedd5; color: var(--high); }
+    .sev-medium { background: #fef3c7; color: var(--medium); }
+    .sev-low { background: #dbeafe; color: var(--low); }
+    .sev-informational { background: #e5e7eb; color: var(--info); }
+    .finding {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 12px;
+      margin: 10px 0;
+      background: #fff;
+    }
+    .finding p {
+      margin: 6px 0;
+      color: #334e68;
+    }
+    .split {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 10px;
+    }
+    code {
+      background: #f8fafc;
+      border-radius: 6px;
+      padding: 1px 5px;
+      font-size: 12px;
+    }
+    pre {
+      margin: 0;
+      max-height: 280px;
+      overflow: auto;
+      font-size: 12px;
+      background: #f8fafc;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <section class="panel">
+      <h1>AEGIS Security Report</h1>
+      <p class="meta">Report ID: {{ report.report_id }}</p>
+      <p class="meta">Generated: {{ report.generated_at.isoformat() }}</p>
+    </section>
+
+    <section class="panel">
+      <h2>Executive Summary</h2>
+      <p>
+        AEGIS executed {{ report.total_attacks }} probes against the configured target and observed
+        {{ report.total_successful }} successful attack outcomes (Overall ASR {{ "{:.1%}".format(report.attack_success_rate) }}).
+        {% if report.defense_comparison and report.defense_comparison.get("delta_attack_success_rate") is not none %}
+        Compared with baseline, this scenario changed ASR by {{ "{:+.1%}".format(report.defense_comparison.get("delta_attack_success_rate", 0.0)) }}.
+        {% endif %}
+        Priority remediation should focus on Critical and High findings first.
+      </p>
+      <div class="summary">
+        <div class="kpi">
+          <div class="label">Total Attacks</div>
+          <div class="value">{{ report.total_attacks }}</div>
+        </div>
+        <div class="kpi">
+          <div class="label">Successful</div>
+          <div class="value">{{ report.total_successful }}</div>
+        </div>
+        <div class="kpi">
+          <div class="label">Blocked</div>
+          <div class="value">{{ report.total_attacks - report.total_successful }}</div>
+        </div>
+        <div class="kpi">
+          <div class="label">Overall ASR</div>
+          <div class="value">{{ "{:.1%}".format(report.attack_success_rate) }}</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Methodology</h2>
+      <p>
+        Framework alignment:
+        {% for fw in methodology.frameworks %}
+          <code>{{ fw }}</code>{% if not loop.last %}, {% endif %}
+        {% endfor %}
+      </p>
+      <p>{{ methodology.scoring }}</p>
+      <p>{{ methodology.pass_fail }}</p>
+      <p class="meta">Baseline-vs-defense comparison uses <code>delta_vs_baseline = defended_rate - baseline_rate</code>.</p>
+    </section>
+
+    <section class="panel">
+      <h2>Severity Definitions</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Severity</th>
+            <th>Definition</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td><span class="badge sev-critical">Critical</span></td><td>Reliable exploit with severe impact (override/exfiltration/system compromise).</td></tr>
+          <tr><td><span class="badge sev-high">High</span></td><td>Reliable exploit with meaningful impact; controls are bypassed.</td></tr>
+          <tr><td><span class="badge sev-medium">Medium</span></td><td>Intermittent or partially effective exploit with moderate impact.</td></tr>
+          <tr><td><span class="badge sev-low">Low</span></td><td>Limited exploitability or constrained impact.</td></tr>
+          <tr><td><span class="badge sev-informational">Informational</span></td><td>Security-relevant observation with no immediate exploitable impact.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="panel">
+      <h2>Findings Summary</h2>
+      <div class="split">
+        <table>
+          <thead>
+            <tr>
+              <th>OWASP ID</th>
+              <th>Category</th>
+              <th>Total</th>
+              <th>Successful</th>
+              <th>ASR</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for category in categories %}
+            <tr>
+              <td>{{ category.owasp_id }}</td>
+              <td>{{ category.category_name }}</td>
+              <td>{{ category.total_attacks }}</td>
+              <td>{{ category.successful_attacks }}</td>
+              <td>{{ "{:.1%}".format(category.attack_success_rate) }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        <table>
+          <thead>
+            <tr><th>Severity</th><th>Count</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><span class="badge sev-critical">Critical</span></td><td>{{ severity_counts.get("critical", 0) }}</td></tr>
+            <tr><td><span class="badge sev-high">High</span></td><td>{{ severity_counts.get("high", 0) }}</td></tr>
+            <tr><td><span class="badge sev-medium">Medium</span></td><td>{{ severity_counts.get("medium", 0) }}</td></tr>
+            <tr><td><span class="badge sev-low">Low</span></td><td>{{ severity_counts.get("low", 0) }}</td></tr>
+            <tr><td><span class="badge sev-informational">Informational</span></td><td>{{ severity_counts.get("informational", 0) }}</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Defense Evaluation Matrix</h2>
+      {% if matrix_rows %}
+      <table>
+        <thead>
+          <tr>
+            <th>Scenario</th>
+            <th>Attack Success Rate</th>
+            <th>Delta vs Baseline</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in matrix_rows %}
+          <tr>
+            <td>{{ row.scenario }}</td>
+            <td>{% if row.attack_success_rate is not none %}{{ "{:.1%}".format(row.attack_success_rate) }}{% else %}n/a{% endif %}</td>
+            <td>{% if row.delta_vs_baseline is not none %}{{ "{:+.1%}".format(row.delta_vs_baseline) }}{% else %}n/a{% endif %}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <p>No matrix comparison data available in this report.</p>
+      {% endif %}
+    </section>
+
+    <section class="panel">
+      <h2>Detailed Findings</h2>
+      {% if findings %}
+        {% for finding in findings %}
+        <article class="finding">
+          <p><strong>{{ finding.title }}</strong></p>
+          <p>
+            <span class="badge sev-{{ finding.severity.value }}">{{ finding.severity.value }}</span>
+            OWASP: <strong>{{ finding.owasp_id }}</strong>{% if finding.owasp_category %} ({{ finding.owasp_category }}){% endif %}
+          </p>
+          {% if finding.mitre_atlas_id %}
+          <p>MITRE ATLAS: <code>{{ finding.mitre_atlas_id }}</code></p>
+          {% endif %}
+          <p>{{ finding.description }}</p>
+          {% if finding.evidence %}
+          <p><strong>Evidence:</strong></p>
+          <ul>
+            {% for item in finding.evidence %}
+            <li>{{ item }}</li>
+            {% endfor %}
+          </ul>
+          {% endif %}
+          {% if finding.delta_vs_baseline is not none %}
+          <p><strong>Delta vs baseline:</strong> {{ "{:+.1%}".format(finding.delta_vs_baseline) }}</p>
+          {% endif %}
+          <p><strong>Recommendation:</strong> {{ finding.recommendation }}</p>
+        </article>
+        {% endfor %}
+      {% else %}
+        <p>No successful attacks detected in this report.</p>
+      {% endif %}
+    </section>
+
+    <section class="panel">
+      <h2>Appendix</h2>
+      <p><strong>Recommendations:</strong></p>
+      <ul>
+        {% for recommendation in report.recommendations %}
+        <li>{{ recommendation }}</li>
+        {% endfor %}
+      </ul>
+      <p><strong>Run Errors:</strong> {{ report.run_errors | length }}</p>
+      {% if report.run_errors %}
+      <pre>{{ report.run_errors | tojson(indent=2) }}</pre>
+      {% endif %}
+      <p><strong>Testbed Configuration Snapshot</strong></p>
+      <pre>{{ report.testbed_config | tojson(indent=2) }}</pre>
+    </section>
+  </div>
+</body>
+</html>

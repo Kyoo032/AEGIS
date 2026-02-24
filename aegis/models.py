@@ -15,6 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field
 class Severity(StrEnum):
     """Attack / finding severity levels."""
 
+    INFORMATIONAL = "informational"
     CRITICAL = "critical"
     HIGH = "high"
     MEDIUM = "medium"
@@ -162,11 +163,14 @@ class Finding(BaseModel):
 
     title: str
     owasp_id: str
+    owasp_category: str | None = None
     atlas_technique: str | None = None
+    mitre_atlas_id: str | None = None
     severity: Severity
     description: str
     evidence: list[str]
     recommendation: str
+    delta_vs_baseline: float | None = None
 
 
 class OWASPCategoryResult(BaseModel):
@@ -197,3 +201,7 @@ class SecurityReport(BaseModel):
     defense_comparison: dict[str, Any] | None = None
     findings: list[Finding]
     recommendations: list[str]
+    run_errors: list[dict[str, Any]] = Field(default_factory=list)
+    probe_results: list[dict[str, Any]] = Field(default_factory=list)
+    methodology: dict[str, Any] | None = None
+    defense_matrix: dict[str, Any] | None = None
