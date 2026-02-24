@@ -5,8 +5,11 @@ import subprocess
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 from aegis.evaluation.llm_judge import LLMJudgeScorer
+from aegis.interfaces.agent import AgentInterface
+from aegis.interfaces.attack import AttackModule
 from aegis.models import (
     AgentResponse,
     AttackPayload,
@@ -22,6 +25,8 @@ def test_run_baseline_returns_security_report():
     report = orchestrator.run_baseline()
     assert isinstance(report, SecurityReport)
     assert report.total_attacks > 0
+    if report.findings:
+        assert all(bool(finding.owasp_category) for finding in report.findings)
 
 
 def test_run_with_defense_sets_defense_comparison():
@@ -33,15 +38,26 @@ def test_run_with_defense_sets_defense_comparison():
 
 def test_run_full_matrix_includes_baseline():
     orchestrator = AEGISOrchestrator()
+    orchestrator.attacks = [orchestrator._load_single_attack("llm01_prompt_inject")]
     reports = orchestrator.run_full_matrix()
     assert "baseline" in reports
     assert isinstance(reports["baseline"], SecurityReport)
+    assert "input_validator+output_filter+tool_boundary" in reports
+    assert "mcp_integrity+permission_enforcer" in reports
 
 
 def test_run_attack_module_works_for_llm01():
     orchestrator = AEGISOrchestrator()
     report = orchestrator.run_attack_module("llm01_prompt_inject")
     assert report.total_attacks > 0
+
+
+def test_run_with_defenses_sets_multi_defense_metadata():
+    orchestrator = AEGISOrchestrator()
+    orchestrator.attacks = [orchestrator._load_single_attack("llm01_prompt_inject")]
+    report = orchestrator.run_with_defenses(["input_validator", "output_filter"])
+    assert report.defense_comparison is not None
+    assert report.defense_comparison["defenses"] == ["input_validator", "output_filter"]
 
 
 # ------------------------------------------------------------------
@@ -128,6 +144,73 @@ def test_decoupled_round_trip(tmp_path: Path):
     assert len(report.recommendations) > 0
 
 
+def test_run_full_matrix_writes_summary_artifact(tmp_path: Path):
+    orchestrator = AEGISOrchestrator()
+    orchestrator.config["reporting"]["output_dir"] = str(tmp_path)
+    orchestrator.attacks = [orchestrator._load_single_attack("llm01_prompt_inject")]
+
+    orchestrator.run_full_matrix()
+
+    files = sorted(tmp_path.glob("day89_defense_matrix_*.json"))
+    assert files, "Expected matrix summary file to be generated"
+    payload = files[-1].read_text(encoding="utf-8")
+    assert "\"errors\"" in payload
+    assert "\"probe_results\"" in payload
+
+
+def test_run_full_matrix_delta_math_consistent(tmp_path: Path):
+    orchestrator = AEGISOrchestrator()
+    orchestrator.config["reporting"]["output_dir"] = str(tmp_path)
+    orchestrator.attacks = [orchestrator._load_single_attack("llm01_prompt_inject")]
+    reports = orchestrator.run_full_matrix()
+    baseline = reports["baseline"].attack_success_rate
+    for name, report in reports.items():
+        if name == "baseline":
+            continue
+        assert report.defense_comparison is not None
+        delta = report.defense_comparison["delta_attack_success_rate"]
+        assert delta == report.attack_success_rate - baseline
+
+
+class _FailingAttack(AttackModule):
+    name = "failing_attack"
+    owasp_id = "LLM01"
+
+    def generate_payloads(self, target_config: dict[str, Any]) -> list[AttackPayload]:
+        return []
+
+    def execute(self, agent: AgentInterface) -> list[AttackResult]:
+        raise RuntimeError("intentional test failure")
+
+    def get_metadata(self) -> dict[str, Any]:
+        return {"name": self.name}
+
+
+class _EmptyAttack(AttackModule):
+    name = "empty_attack"
+    owasp_id = "LLM01"
+
+    def generate_payloads(self, target_config: dict[str, Any]) -> list[AttackPayload]:
+        return []
+
+    def execute(self, agent: AgentInterface) -> list[AttackResult]:
+        return []
+
+    def get_metadata(self) -> dict[str, Any]:
+        return {"name": self.name}
+
+
+def test_run_full_matrix_continues_when_module_raises(tmp_path: Path):
+    orchestrator = AEGISOrchestrator()
+    orchestrator.config["reporting"]["output_dir"] = str(tmp_path)
+    orchestrator.attacks = [_FailingAttack(), _EmptyAttack()]
+
+    reports = orchestrator.run_full_matrix()
+    assert "baseline" in reports
+    assert "input_validator" in reports
+    assert any(err["module"] == "failing_attack" for err in reports["baseline"].run_errors)
+
+
 def test_load_scorers_includes_llm_judge():
     """When config lists llm_judge, LLMJudgeScorer is instantiated with config values."""
     orchestrator = AEGISOrchestrator()
@@ -152,3 +235,16 @@ def test_main_help():
     )
     assert result.returncode == 0
     assert "AEGIS Orchestrator" in result.stdout
+
+
+def test_day7_core7_config_loads_expected_attack_set():
+    orchestrator = AEGISOrchestrator(config_path="aegis/config.day7_core7.yaml")
+    assert [attack.name for attack in orchestrator.attacks] == [
+        "asi01_goal_hijack",
+        "asi02_tool_misuse",
+        "asi04_supply_chain",
+        "asi05_code_exec",
+        "asi06_memory_poison",
+        "mcp06_cmd_injection",
+        "llm01_prompt_inject",
+    ]

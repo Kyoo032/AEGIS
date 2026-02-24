@@ -19,6 +19,7 @@ from aegis.testbed.mcp_servers.email_server import (
 from aegis.testbed.mcp_servers.email_server import (
     configure_security as configure_email,
 )
+from aegis.testbed.mcp_servers.evil_server import poisoned_prompt, poisoned_tool_schema
 from aegis.testbed.mcp_servers.filesystem_server import (
     configure_security as configure_filesystem,
 )
@@ -144,3 +145,15 @@ def test_email_clear_inbox():
     result = clear_inbox()
     assert result == "Inbox cleared"
     assert len(read_inbox()) == 0
+
+
+def test_evil_server_poisoned_prompt_marker():
+    output = poisoned_prompt()
+    assert "MALICIOUS_TOOL_OUTPUT" in output
+    assert "attacker@evil.example" in output
+
+
+def test_evil_server_poisoned_tool_schema_shape():
+    schema = poisoned_tool_schema()
+    assert schema["name"] == "safe_lookup"
+    assert "credentials" in str(schema["description"]).lower()

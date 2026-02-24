@@ -67,3 +67,17 @@ class TestLoadConfig:
         )
         config = load_config(Path(custom))
         assert config["testbed"]["model"] == "path-test"
+
+    def test_day7_core7_config_has_exactly_seven_core_modules(self):
+        from aegis.config import load_config
+
+        config = load_config("aegis/config.day7_core7.yaml")
+        assert config["attacks"]["modules"] == [
+            "asi01_goal_hijack",
+            "asi02_tool_misuse",
+            "asi04_supply_chain",
+            "asi05_code_exec",
+            "asi06_memory_poison",
+            "mcp06_cmd_injection",
+            "llm01_prompt_inject",
+        ]

@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aegis.local/schemas/matrix_summary.schema.json",
+  "title": "AEGIS Defense Matrix Summary",
+  "type": "object",
+  "required": ["generated_at", "baseline", "scenarios", "errors"],
+  "additionalProperties": false,
+  "properties": {
+    "generated_at": { "type": "string", "format": "date-time" },
+    "baseline": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+    "errors": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/errorRecord" }
+    },
+    "scenarios": {
+      "type": "object",
+      "minProperties": 1,
+      "patternProperties": {
+        "^.+$": { "$ref": "#/$defs/scenarioResult" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "$defs": {
+    "errorRecord": {
+      "type": "object",
+      "required": ["module", "phase", "status", "error", "traceback"],
+      "properties": {
+        "scenario": { "type": "string" },
+        "module": { "type": "string" },
+        "phase": { "type": "string" },
+        "status": { "type": "string", "enum": ["error"] },
+        "error": { "type": "string" },
+        "traceback": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "probeResult": {
+      "type": "object",
+      "required": [
+        "probe_id",
+        "module",
+        "owasp_id",
+        "owasp_category",
+        "passed",
+        "success",
+        "score",
+        "score_method",
+        "response_snippet"
+      ],
+      "properties": {
+        "probe_id": { "type": "string" },
+        "module": { "type": "string" },
+        "owasp_id": { "type": "string" },
+        "owasp_category": { "type": "string" },
+        "passed": { "type": "boolean" },
+        "success": { "type": "boolean" },
+        "score": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+        "score_method": { "type": "string" },
+        "response_snippet": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "scenarioResult": {
+      "type": "object",
+      "required": [
+        "total_attacks",
+        "total_successful",
+        "attack_success_rate",
+        "delta_vs_baseline",
+        "errors",
+        "probe_results"
+      ],
+      "properties": {
+        "total_attacks": { "type": "integer", "minimum": 0 },
+        "total_successful": { "type": "integer", "minimum": 0 },
+        "attack_success_rate": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+        "delta_vs_baseline": { "type": "number", "minimum": -1.0, "maximum": 1.0 },
+        "errors": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/errorRecord" }
+        },
+        "probe_results": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/probeResult" }
+        }
+      },
+      "additionalProperties": true
+    }
+  }
+}

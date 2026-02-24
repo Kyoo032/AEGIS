@@ -3,19 +3,23 @@ from __future__ import annotations
 
 import json
 import logging
+import traceback
 from collections import defaultdict
 from datetime import UTC, datetime
 from importlib import import_module
 from pathlib import Path
+from typing import Any, Callable
 from uuid import uuid4
 
 from aegis.attacks.base import BaseAttackModule
 from aegis.attacks.llm01_prompt_inject import PromptInjectionModule
 from aegis.config import load_config
 from aegis.evaluation.pipeline import EvaluationPipeline
+from aegis.evaluation.protocol_adapter import ProtocolScorerAdapter
 from aegis.evaluation.scorer import RuleBasedScorer
 from aegis.interfaces.attack import AttackModule
 from aegis.interfaces.scorer import Scorer
+from aegis.interfaces.scorer_protocol import ScorerProtocol
 from aegis.models import (
     AttackResult,
     EvaluationResult,
@@ -24,6 +28,7 @@ from aegis.models import (
     SecurityReport,
     Severity,
 )
+from aegis.reporting.owasp_mapper import get_owasp_info
 from aegis.testbed.agent import DefaultAgent
 
 logger = logging.getLogger(__name__)
@@ -33,17 +38,31 @@ _RECOMMENDATIONS_BY_SEVERITY: dict[Severity, str] = {
     Severity.HIGH: "Strengthen instruction boundary checks and output filtering.",
     Severity.MEDIUM: "Tighten tool parameter validation and monitoring coverage.",
     Severity.LOW: "Track low-risk findings and add regression tests.",
+    Severity.INFORMATIONAL: "Monitor observed behavior and keep regression coverage up to date.",
 }
 
 
 class AEGISOrchestrator:
     """Run attacks against the testbed agent and produce security reports."""
 
-    def __init__(self, config_path: str | None = None) -> None:
+    def __init__(
+        self,
+        config_path: str | None = None,
+        scorers: list[Scorer] | None = None,
+        protocol_scorers: list[ScorerProtocol] | None = None,
+    ) -> None:
         self.config = load_config(config_path)
         self.agent = DefaultAgent(config=dict(self.config["testbed"]))
         self.attacks = self._load_attacks()
-        self.scorers = self._load_scorers()
+
+        configured_scorers = list(scorers) if scorers is not None else self._load_scorers()
+        if protocol_scorers:
+            configured_scorers.extend(ProtocolScorerAdapter(scorer) for scorer in protocol_scorers)
+        if not configured_scorers:
+            configured_scorers = [RuleBasedScorer()]
+        self.scorers = configured_scorers
+
+        self._last_run_errors: list[dict[str, Any]] = []
 
     # ------------------------------------------------------------------
     # Public API — high-level convenience methods
@@ -52,38 +71,114 @@ class AEGISOrchestrator:
     def run_baseline(self) -> SecurityReport:
         """Run all loaded attacks with no active defense."""
         results_path = self.run_attacks(defense_name=None)
-        return self.score_results(results_path, defense_name=None)
+        return self.score_results(
+            results_path,
+            defense_name=None,
+            run_errors=list(self._last_run_errors),
+        )
 
     def run_with_defense(self, defense_name: str) -> SecurityReport:
         """Run all loaded attacks with one defense enabled."""
         self.agent.enable_defense(defense_name, {"enabled": True})
         try:
             results_path = self.run_attacks(defense_name=defense_name)
-            return self.score_results(results_path, defense_name=defense_name)
+            return self.score_results(
+                results_path,
+                defense_name=defense_name,
+                run_errors=list(self._last_run_errors),
+            )
         finally:
             self.agent.disable_defense(defense_name)
+
+    def run_with_defenses(self, defense_names: list[str], label: str | None = None) -> SecurityReport:
+        """Run all loaded attacks with multiple defenses enabled simultaneously."""
+        normalized = [str(name) for name in defense_names]
+        for name in normalized:
+            self.agent.enable_defense(name, {"enabled": True})
+        defense_label = label or "+".join(normalized)
+        try:
+            results_path = self.run_attacks(defense_name=defense_label)
+            report = self.score_results(
+                results_path,
+                defense_name=defense_label,
+                run_errors=list(self._last_run_errors),
+            )
+            if report.defense_comparison is None:
+                report.defense_comparison = {}
+            report.defense_comparison["defenses"] = normalized
+            return report
+        finally:
+            for name in reversed(normalized):
+                self.agent.disable_defense(name)
 
     def run_attack_module(self, module_name: str) -> SecurityReport:
         """Run a single attack module by module name."""
         attack = self._load_single_attack(module_name)
         results_path = self.run_attacks(attacks=[attack], defense_name=None)
-        return self.score_results(results_path, defense_name=None)
+        return self.score_results(
+            results_path,
+            defense_name=None,
+            run_errors=list(self._last_run_errors),
+        )
 
     def run_full_matrix(self) -> dict[str, SecurityReport]:
         """Run baseline + each configured defense."""
-        reports: dict[str, SecurityReport] = {"baseline": self.run_baseline()}
-        for defense_name in self.config["defenses"]["available"]:
-            reports[defense_name] = self.run_with_defense(str(defense_name))
+        reports: dict[str, SecurityReport] = {
+            "baseline": self._run_scenario("baseline", self.run_baseline),
+        }
+        available = self.get_available_defenses()
+        for defense_name in available:
+            reports[defense_name] = self._run_scenario(
+                defense_name,
+                lambda d=defense_name: self.run_with_defense(d),
+            )
 
-        baseline_rate = reports["baseline"].attack_success_rate
+        layered_defaults = [
+            ["input_validator", "output_filter", "tool_boundary"],
+            ["mcp_integrity", "permission_enforcer"],
+            [
+                "input_validator",
+                "output_filter",
+                "tool_boundary",
+                "mcp_integrity",
+                "permission_enforcer",
+            ],
+        ]
+        layered = self.config["defenses"].get("layered_combinations", layered_defaults)
+        for combo in layered:
+            if not isinstance(combo, list):
+                continue
+            names = [str(name) for name in combo if str(name) in available]
+            if len(names) < 2:
+                continue
+            label = "+".join(names)
+            reports[label] = self._run_scenario(
+                label,
+                lambda n=names, l=label: self.run_with_defenses(n, label=l),
+            )
+
+        baseline_rate = reports["baseline"].attack_success_rate if "baseline" in reports else 0.0
         for key, report in reports.items():
             if key == "baseline":
                 continue
+            delta = report.attack_success_rate - baseline_rate
             report.defense_comparison = {
+                **(report.defense_comparison or {}),
+                "defense_name": key,
                 "baseline_attack_success_rate": baseline_rate,
                 "defense_attack_success_rate": report.attack_success_rate,
-                "delta_attack_success_rate": report.attack_success_rate - baseline_rate,
+                "delta_attack_success_rate": delta,
             }
+            for finding in report.findings:
+                finding.delta_vs_baseline = delta
+
+        matrix_path = self._write_matrix_summary(reports)
+        for scenario, report in reports.items():
+            report.defense_matrix = {
+                "scenario": scenario,
+                "summary_path": str(matrix_path),
+            }
+
         return reports
 
     # ------------------------------------------------------------------
@@ -100,23 +195,42 @@ class AEGISOrchestrator:
             attacks = self.attacks
 
         run_id = str(uuid4())
-        output_dir = Path(
-            self.config["reporting"].get("output_dir", "./reports")
-        )
+        output_dir = Path(self.config["reporting"].get("output_dir", "./reports"))
         output_dir.mkdir(parents=True, exist_ok=True)
         results_path = output_dir / f"attack_results_{run_id}.jsonl"
 
+        errors: list[dict[str, Any]] = []
         count = 0
         with results_path.open("w", encoding="utf-8") as fh:
             for attack in attacks:
-                attack.generate_payloads(self.agent.get_config())
-                results = attack.execute(self.agent)
+                module_name = getattr(attack, "name", attack.__class__.__name__)
+                try:
+                    attack.generate_payloads(self.agent.get_config())
+                except Exception as exc:
+                    err = _make_error_record(module=module_name, phase="generate_payloads", exc=exc)
+                    errors.append(err)
+                    logger.exception("Attack payload generation failed for module '%s'", module_name)
+                    continue
+
+                try:
+                    results = attack.execute(self.agent)
+                except Exception as exc:
+                    err = _make_error_record(module=module_name, phase="execute", exc=exc)
+                    errors.append(err)
+                    logger.exception("Attack execution failed for module '%s'", module_name)
+                    continue
+
                 for result in results:
                     fh.write(result.model_dump_json() + "\n")
                     count += 1
 
+        self._last_run_errors = errors
         logger.info(
-            "Saved %d attack results to %s (run_id=%s)", count, results_path, run_id
+            "Saved %d attack results to %s (run_id=%s, errors=%d)",
+            count,
+            results_path,
+            run_id,
+            len(errors),
         )
         return results_path
 
@@ -124,9 +238,12 @@ class AEGISOrchestrator:
         self,
         results_path: str | Path,
         defense_name: str | None = None,
+        run_errors: list[dict[str, Any]] | None = None,
     ) -> SecurityReport:
         """Load AttackResults from JSONL, score with pipeline, build report."""
         results_path = Path(results_path)
+        errors: list[dict[str, Any]] = list(run_errors or [])
+
         attack_results: list[AttackResult] = []
         with results_path.open("r", encoding="utf-8") as fh:
             for line_num, line in enumerate(fh, 1):
@@ -139,31 +256,66 @@ class AEGISOrchestrator:
                     logger.warning(
                         "Skipping invalid JSONL at %s:%d: %s", results_path, line_num, exc
                     )
+                    errors.append(
+                        {
+                            "module": "jsonl_parser",
+                            "phase": "score_results",
+                            "status": "error",
+                            "error": f"Invalid JSONL at {results_path}:{line_num}: {exc}",
+                            "traceback": "",
+                        }
+                    )
 
         pipeline = EvaluationPipeline(scorers=self.scorers)
-        eval_results = pipeline.evaluate(attack_results)
-        return self._build_report(eval_results, defense_name=defense_name)
+        try:
+            eval_results = pipeline.evaluate(attack_results)
+        except Exception as exc:
+            errors.append(_make_error_record(module="evaluation_pipeline", phase="evaluate", exc=exc))
+            logger.exception("Evaluation pipeline failed")
+            eval_results = []
+
+        return self._build_report(eval_results, defense_name=defense_name, run_errors=errors)
 
     def _build_report(
         self,
         eval_results: list[EvaluationResult],
         defense_name: str | None,
+        run_errors: list[dict[str, Any]] | None = None,
     ) -> SecurityReport:
         grouped: dict[str, list[EvaluationResult]] = defaultdict(list)
         findings: list[Finding] = []
         recommendations: set[str] = set()
+        probe_results: list[dict[str, Any]] = []
 
         for eval_result in eval_results:
             grouped[eval_result.owasp_id].append(eval_result)
+
+            payload = eval_result.attack_result.payload
+            probe_results.append(
+                {
+                    "probe_id": payload.id,
+                    "module": payload.attack_module,
+                    "owasp_id": payload.owasp_id,
+                    "owasp_category": payload.category,
+                    "passed": not eval_result.success,
+                    "success": eval_result.success,
+                    "score": eval_result.confidence,
+                    "score_method": str(eval_result.scoring_method),
+                    "response_snippet": _truncate_text(eval_result.attack_result.response.final_output),
+                }
+            )
+
             if not eval_result.success:
                 continue
 
-            payload = eval_result.attack_result.payload
+            owasp_info = get_owasp_info(payload.owasp_id)
             evidence = eval_result.indicators or [eval_result.attack_result.response.final_output]
             finding = Finding(
                 title=f"{payload.owasp_id} attack succeeded ({payload.id})",
                 owasp_id=payload.owasp_id,
+                owasp_category=owasp_info["name"],
                 atlas_technique=payload.atlas_technique,
+                mitre_atlas_id=payload.atlas_technique,
                 severity=payload.severity,
                 description=eval_result.explanation,
                 evidence=evidence[:5],
@@ -177,7 +329,8 @@ class AEGISOrchestrator:
             total = len(items)
             successful = sum(1 for item in items if item.success)
             attack_success_rate = successful / total if total else 0.0
-            category_name = items[0].attack_result.payload.category if items else owasp_id
+            default_name = items[0].attack_result.payload.category if items else owasp_id
+            category_name = get_owasp_info(owasp_id).get("name") or default_name
             category_findings = [finding for finding in findings if finding.owasp_id == owasp_id]
             results_by_owasp[owasp_id] = OWASPCategoryResult(
                 owasp_id=owasp_id,
@@ -209,7 +362,17 @@ class AEGISOrchestrator:
             defense_comparison=defense_comparison,
             findings=findings,
             recommendations=sorted(recommendations),
+            run_errors=list(run_errors or []),
+            probe_results=probe_results,
         )
+
+    def get_available_attack_modules(self) -> list[str]:
+        """Return configured attack module names."""
+        return [str(name) for name in self.config["attacks"]["modules"]]
+
+    def get_available_defenses(self) -> list[str]:
+        """Return configured defense names."""
+        return [str(name) for name in self.config["defenses"]["available"]]
 
     def _load_attacks(self) -> list[AttackModule]:
         attack_names = self.config["attacks"]["modules"]
@@ -271,6 +434,91 @@ class AEGISOrchestrator:
         )
         return LLMJudgeScorer(judge_model=judge_model, base_url=base_url)
 
+    def _run_scenario(self, name: str, runner: Callable[[], SecurityReport]) -> SecurityReport:
+        """Run one scenario and never raise, returning an error report on failure."""
+        try:
+            return runner()
+        except Exception as exc:
+            logger.exception("Scenario '%s' failed", name)
+            error = _make_error_record(module=name, phase="scenario", exc=exc)
+            return self._build_empty_report(defense_name=name if name != "baseline" else None, run_errors=[error])
+
+    def _build_empty_report(
+        self,
+        defense_name: str | None,
+        run_errors: list[dict[str, Any]],
+    ) -> SecurityReport:
+        defense_comparison = None
+        if defense_name is not None:
+            defense_comparison = {"defense_name": defense_name}
+
+        return SecurityReport(
+            report_id=f"report-{uuid4()}",
+            generated_at=datetime.now(UTC),
+            testbed_config=self.agent.get_config(),
+            total_attacks=0,
+            total_successful=0,
+            attack_success_rate=0.0,
+            results_by_owasp={},
+            defense_comparison=defense_comparison,
+            findings=[],
+            recommendations=["Run failed; inspect run_errors for details."],
+            run_errors=run_errors,
+            probe_results=[],
+        )
+
+    def _write_matrix_summary(self, reports: dict[str, SecurityReport]) -> Path:
+        output_dir = Path(self.config["reporting"].get("output_dir", "./reports"))
+        output_dir.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+        path = output_dir / f"day89_defense_matrix_{timestamp}.json"
+
+        matrix: dict[str, Any] = {
+            "generated_at": datetime.now(UTC).isoformat(),
+            "baseline": reports["baseline"].attack_success_rate if "baseline" in reports else 0.0,
+            "scenarios": {},
+            "errors": [],
+        }
+        baseline_rate = float(matrix["baseline"])
+        for name, report in reports.items():
+            scenario_errors = [
+                {
+                    "scenario": name,
+                    **error,
+                }
+                for error in report.run_errors
+            ]
+            matrix["errors"].extend(scenario_errors)
+            matrix["scenarios"][name] = {
+                "total_attacks": report.total_attacks,
+                "total_successful": report.total_successful,
+                "attack_success_rate": report.attack_success_rate,
+                "delta_vs_baseline": report.attack_success_rate - baseline_rate,
+                "errors": report.run_errors,
+                "probe_results": report.probe_results,
+            }
+
+        path.write_text(json.dumps(matrix, indent=2), encoding="utf-8")
+        logger.info("Wrote defense matrix summary to %s", path)
+        return path
+
+
+def _make_error_record(module: str, phase: str, exc: Exception) -> dict[str, Any]:
+    return {
+        "module": module,
+        "phase": phase,
+        "status": "error",
+        "error": str(exc),
+        "traceback": "".join(traceback.format_exception(type(exc), exc, exc.__traceback__)),
+    }
+
+
+def _truncate_text(text: str, max_len: int = 220) -> str:
+    normalized = " ".join(str(text).split())
+    if len(normalized) <= max_len:
+        return normalized
+    return normalized[: max_len - 3] + "..."
+
 
 if __name__ == "__main__":
     import argparse
@@ -310,7 +558,7 @@ if __name__ == "__main__":
             print(f"Report written to {out_path}")
         else:
             print(output_text)
-    else:  # scan or no command → baseline
+    else:  # scan or no command -> baseline
         report = orch.run_baseline()
         output_text = json.dumps(report.model_dump(mode="json"), indent=2)
         if args.output:
