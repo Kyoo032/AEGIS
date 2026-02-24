@@ -21,7 +21,6 @@ from aegis.models import (
     Severity,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -165,7 +164,7 @@ class TestLLMJudgeScorerRetry:
         bad_response = {"response": "not json at all {{"}
         mock_resp = _mock_urlopen_response(bad_response)
 
-        with patch("aegis.evaluation.llm_judge.urlopen", return_value=mock_resp) as mock_open:
+        with patch("aegis.evaluation.llm_judge.urlopen", return_value=mock_resp):
             result = scorer.evaluate(_make_attack_result())
 
         assert result.success is False

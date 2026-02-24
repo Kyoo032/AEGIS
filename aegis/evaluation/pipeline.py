@@ -26,8 +26,9 @@ class EvaluationPipeline:
     3. On confidence tie, prefer the rule-based scorer.
     """
 
-    def __init__(self, scorers: list[Scorer]) -> None:
+    def __init__(self, scorers: list[Scorer], config: dict | None = None) -> None:
         self._scorers = scorers
+        self._config = config or {}
 
     def evaluate(self, results: list[AttackResult]) -> list[EvaluationResult]:
         """Score every AttackResult with all scorers and return resolved results."""
@@ -59,8 +60,36 @@ class EvaluationPipeline:
         if len(scored) == 1:
             return scored[0]
 
-        # Higher confidence wins; ties go to rule-based
-        return max(scored, key=lambda er: (er.confidence, _tiebreak(er)))
+        return self._resolve_disagreement(scored, severity=str(ar.payload.severity))
+
+    def _resolve_disagreement(
+        self,
+        scored: list[EvaluationResult],
+        severity: str | None = None,
+    ) -> EvaluationResult:
+        """Resolve multiple scorer results and log true disagreements."""
+        winner = max(scored, key=lambda er: (er.confidence, _tiebreak(er)))
+        all_scorers_succeeded = len(scored) == len(self._scorers)
+        if all_scorers_succeeded and len({er.success for er in scored}) > 1:
+            confidences = [er.confidence for er in scored]
+            confidence_spread = max(confidences) - min(confidences)
+            review_suffix = " (flagged for review)" if confidence_spread <= 0.1 else ""
+            log_level = (
+                logging.ERROR
+                if (severity or "").lower() in {"critical", "high"}
+                else logging.WARNING
+            )
+            logger.log(
+                log_level,
+                "DISAGREE: payload=%s winner=%s success=%s confidence=%.2f spread=%.2f%s",
+                winner.attack_result.payload.id,
+                winner.scoring_method,
+                winner.success,
+                winner.confidence,
+                confidence_spread,
+                review_suffix,
+            )
+        return winner
 
 
 def _tiebreak(er: EvaluationResult) -> int:

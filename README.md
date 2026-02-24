@@ -10,6 +10,14 @@ uv run pytest
 uv run aegis --help
 ```
 
+## Primary Local Models
+
+- Target agent baseline: local Ollama model `qwen3:4b`
+- Judge/lightweight baseline: local Ollama model `qwen3:1.7b`
+- Default local Ollama endpoint: `http://localhost:11434`
+
+AEGIS is tuned for local-first runs using these two models as the reference setup.
+
 ## Validation Policy
 
 - Day 1-3 runtime validation was completed manually on February 18-19, 2026.
