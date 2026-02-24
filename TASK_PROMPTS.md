@@ -52,6 +52,10 @@ These supplement AEGIS's custom attack modules. Usage is marked `[OPTIONAL]` in 
   - Promptfoo
   - Garak
   - Augustus
+- Primary local model baseline for AEGIS development:
+  - Target agent runs on local Ollama `qwen3:4b`
+  - Judge/lightweight evaluations run on local Ollama `qwen3:1.7b`
+  - Default local endpoint: `http://localhost:11434`
 - Baseline evidence to reuse:
   - `docs/augustus_scan_results.jsonl`
   - `docs/augustus_scan_report.html`
