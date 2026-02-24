@@ -47,6 +47,7 @@ class MockAgent(AgentInterface):
         self._injected_contexts: list[dict[str, str]] = []
 
     def run(self, payload: AttackPayload) -> AgentResponse:
+        """Return a deterministic canned response for the provided payload."""
         if self._simulate_latency_ms:
             time.sleep(self._simulate_latency_ms / 1000.0)
 
@@ -86,34 +87,42 @@ class MockAgent(AgentInterface):
         return response
 
     def reset(self) -> None:
+        """Reset run history, response cursor, and injected context state."""
         self._run_history.clear()
         self._response_index = 0
         self._injected_contexts.clear()
 
     def get_config(self) -> dict[str, Any]:
+        """Return a copy of mock agent configuration."""
         return dict(self._config)
 
     def enable_defense(self, defense_name: str, config: dict[str, Any]) -> None:
+        """Enable a mock defense marker."""
         self._defenses[defense_name] = dict(config)
 
     def disable_defense(self, defense_name: str) -> None:
+        """Disable a mock defense marker."""
         self._defenses.pop(defense_name, None)
 
     def inject_context(self, context: str, method: str) -> None:
+        """Record injected context for assertions in tests."""
         if method not in {"rag", "memory", "tool_output"}:
             raise ValueError("method must be one of 'rag' | 'memory' | 'tool_output'")
         self._injected_contexts.append({"context": context, "method": method})
 
     @property
     def run_history(self) -> list[dict[str, Any]]:
+        """Return a copy of run history captured by this mock."""
         return [dict(item) for item in self._run_history]
 
     @property
     def run_count(self) -> int:
+        """Return the number of runs since last reset."""
         return len(self._run_history)
 
     @property
     def injected_contexts(self) -> list[dict[str, str]]:
+        """Return recorded injected context events."""
         return [dict(item) for item in self._injected_contexts]
 
     def _next_response(self) -> MockResponse:

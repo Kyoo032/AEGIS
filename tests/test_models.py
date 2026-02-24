@@ -80,6 +80,7 @@ def sample_attack_result(sample_attack_payload, sample_agent_response):
 
 class TestEnums:
     def test_severity_values(self):
+        assert Severity.INFORMATIONAL == "informational"
         assert Severity.CRITICAL == "critical"
         assert Severity.HIGH == "high"
         assert Severity.MEDIUM == "medium"
@@ -321,11 +322,23 @@ class TestFinding:
     def test_atlas_technique_optional(self, sample_finding):
         f = Finding(**sample_finding)
         assert f.atlas_technique is None
+        assert f.mitre_atlas_id is None
+        assert f.owasp_category is None
+        assert f.delta_vs_baseline is None
 
     def test_with_atlas_technique(self, sample_finding):
-        data = {**sample_finding, "atlas_technique": "AML.T0051"}
+        data = {
+            **sample_finding,
+            "atlas_technique": "AML.T0051",
+            "mitre_atlas_id": "AML.T0051",
+            "owasp_category": "Prompt Injection",
+            "delta_vs_baseline": -0.25,
+        }
         f = Finding(**data)
         assert f.atlas_technique == "AML.T0051"
+        assert f.mitre_atlas_id == "AML.T0051"
+        assert f.owasp_category == "Prompt Injection"
+        assert f.delta_vs_baseline == -0.25
 
     def test_evidence_is_list(self, sample_finding):
         f = Finding(**sample_finding)
@@ -442,3 +455,10 @@ class TestSecurityReport:
     def test_recommendations_is_list(self, sample_report):
         report = SecurityReport(**sample_report)
         assert len(report.recommendations) == 2
+
+    def test_new_optional_fields_default(self, sample_report):
+        report = SecurityReport(**sample_report)
+        assert report.run_errors == []
+        assert report.probe_results == []
+        assert report.methodology is None
+        assert report.defense_matrix is None

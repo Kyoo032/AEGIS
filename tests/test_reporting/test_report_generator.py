@@ -121,6 +121,7 @@ class TestReportGeneratorGenerate:
         results = [_make_eval_result(success=True)]
         report = rg.generate(results)
         assert len(report.findings) == 1
+        assert report.findings[0].owasp_category
 
     def test_no_findings_for_failed_attacks(self):
         rg = ReportGenerator()
@@ -203,6 +204,35 @@ class TestReportGeneratorRenderHtml:
         html = rg.render_html(report)
         assert "No successful attacks" in html
 
+    def test_html_contains_executive_summary(self):
+        rg = ReportGenerator()
+        report = rg.generate([_make_eval_result(success=True)])
+        html = rg.render_html(report)
+        assert "Executive Summary" in html
+        assert "Overall ASR" in html
+
+    def test_html_contains_sar_sections(self):
+        rg = ReportGenerator()
+        report = rg.generate([_make_eval_result(success=True)])
+        html = rg.render_html(report)
+        for section in (
+            "Executive Summary",
+            "Methodology",
+            "Severity Definitions",
+            "Findings Summary",
+            "Defense Evaluation Matrix",
+            "Detailed Findings",
+            "Appendix",
+        ):
+            assert section in html
+
+    def test_html_contains_atlas_reference(self):
+        rg = ReportGenerator()
+        report = rg.generate([_make_eval_result(success=True, atlas_technique="AML.T0051")])
+        html = rg.render_html(report)
+        assert "MITRE ATLAS" in html
+        assert "AML.T0051" in html
+
 
 # ---------------------------------------------------------------------------
 # ReportGenerator.render_json()
@@ -230,3 +260,12 @@ class TestReportGeneratorRenderJson:
         report = rg.generate(results)
         parsed = json.loads(rg.render_json(report))
         assert parsed["total_attacks"] == 3
+
+    def test_json_contains_mapping_fields(self):
+        rg = ReportGenerator()
+        report = rg.generate([_make_eval_result(success=True)], defense_name="input_validator")
+        parsed = json.loads(rg.render_json(report))
+        assert parsed["findings"][0]["owasp_id"] == "LLM01"
+        assert parsed["findings"][0]["owasp_category"] == "Prompt Injection"
+        assert parsed["findings"][0]["severity"] == "high"
+        assert parsed["findings"][0]["owasp_mapping"]["owasp_name"] == "Prompt Injection"
