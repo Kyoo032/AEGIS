@@ -17,7 +17,6 @@ from aegis.models import (
 )
 from aegis.reporting.report_generator import ReportGenerator
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

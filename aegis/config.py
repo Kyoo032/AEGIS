@@ -33,9 +33,40 @@ _DEFAULTS: dict[str, Any] = {
             "require_external": False,
         },
         "agent_profile": "default",
-        "mcp_servers": ["filesystem", "http", "email", "code_exec"],
+        "llm_timeout_seconds": 30,
+        "llm_max_retries": 3,
+        "llm_retry_base_delay_seconds": 0.5,
+        "llm_retry_max_delay_seconds": 8.0,
+        "llm_retry_jitter_seconds": 0.25,
+        "mcp_servers": ["filesystem", "http", "email", "database", "code_exec"],
         "rag_enabled": True,
         "memory_enabled": True,
+        "profiles": {
+            "default": {
+                "mcp_servers": ["filesystem", "http", "email", "database", "code_exec"],
+                "rag_enabled": True,
+                "memory_enabled": True,
+                "defenses_active": [],
+                "restrict_servers": False,
+                "security_overrides": {},
+            },
+            "hardened": {
+                "mcp_servers": ["filesystem", "http", "email"],
+                "rag_enabled": True,
+                "memory_enabled": True,
+                "defenses_active": ["input_validator"],
+                "restrict_servers": True,
+                "security_overrides": {"code_exec_enabled": False},
+            },
+            "minimal": {
+                "mcp_servers": ["filesystem"],
+                "rag_enabled": False,
+                "memory_enabled": False,
+                "defenses_active": [],
+                "restrict_servers": True,
+                "security_overrides": {"code_exec_enabled": False},
+            },
+        },
         "security": {
             "http_allowlist": ["localhost", "127.0.0.1", "::1"],
             "http_block_private_networks": True,
@@ -196,3 +227,28 @@ def _validate_nested(config: dict[str, Any], source_path: Path) -> None:
         raise ValueError(
             f"{source_path}: 'testbed.security.http_block_private_networks' must be bool."
         )
+
+    profiles = testbed.get("profiles")
+    if not isinstance(profiles, dict):
+        raise ValueError(f"{source_path}: 'testbed.profiles' must be a mapping.")
+    for name, profile_cfg in profiles.items():
+        if not isinstance(profile_cfg, dict):
+            raise ValueError(
+                f"{source_path}: 'testbed.profiles.{name}' must be a mapping."
+            )
+        for key in ("mcp_servers", "defenses_active"):
+            value = profile_cfg.get(key, [])
+            if not isinstance(value, list):
+                raise ValueError(
+                    f"{source_path}: 'testbed.profiles.{name}.{key}' must be a list."
+                )
+        restrict_servers = profile_cfg.get("restrict_servers", False)
+        if not isinstance(restrict_servers, bool):
+            raise ValueError(
+                f"{source_path}: 'testbed.profiles.{name}.restrict_servers' must be bool."
+            )
+        security_overrides = profile_cfg.get("security_overrides", {})
+        if not isinstance(security_overrides, dict):
+            raise ValueError(
+                f"{source_path}: 'testbed.profiles.{name}.security_overrides' must be a mapping."
+            )

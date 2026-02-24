@@ -3,8 +3,8 @@
 # Changes require consensus from both track owners.
 
 testbed:
-  model: "qwen3:4b"
-  fallback_model: "qwen3:1.7b"
+  model: "qwen3:4b"                # primary local agent model (Ollama)
+  fallback_model: "qwen3:1.7b"     # primary local lightweight/judge model (Ollama)
   context_length: 4096              # 4GB VRAM budget — do not exceed
   model_provider: "ollama"          # legacy key: ollama | huggingface | anthropic
   provider:
@@ -14,13 +14,41 @@ testbed:
     hf_token_env: "HF_TOKEN"
     require_external: false         # true => fail if no Ollama/HF provider is available
   agent_profile: "default"          # default | hardened | minimal
+  llm_timeout_seconds: 30
+  llm_max_retries: 3
+  llm_retry_base_delay_seconds: 0.5
+  llm_retry_max_delay_seconds: 8.0
+  llm_retry_jitter_seconds: 0.25
   mcp_servers:
     - filesystem
     - http
     - email
+    - database
     - code_exec
   rag_enabled: true
   memory_enabled: true
+  profiles:
+    default:
+      mcp_servers: [filesystem, http, email, database, code_exec]
+      rag_enabled: true
+      memory_enabled: true
+      defenses_active: []
+      restrict_servers: false
+      security_overrides: {}
+    hardened:
+      mcp_servers: [filesystem, http, email]
+      rag_enabled: true
+      memory_enabled: true
+      defenses_active: [input_validator]
+      restrict_servers: true
+      security_overrides: { code_exec_enabled: false }
+    minimal:
+      mcp_servers: [filesystem]
+      rag_enabled: false
+      memory_enabled: false
+      defenses_active: []
+      restrict_servers: true
+      security_overrides: { code_exec_enabled: false }
   security:
     http_allowlist: ["localhost", "127.0.0.1", "::1"]
     http_block_private_networks: true
