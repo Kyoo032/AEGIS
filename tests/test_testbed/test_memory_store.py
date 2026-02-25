@@ -28,3 +28,21 @@ def test_memory_store_snapshot_contains_count():
 def test_memory_store_rejects_invalid_max_turns():
     with pytest.raises(ValueError):
         MemoryStore(max_turns=0)
+
+
+def test_memory_store_extend_adds_multiple():
+    store = MemoryStore(max_turns=10)
+    store.extend([
+        {"role": "user", "content": "hello"},
+        {"role": "assistant", "content": "hi"},
+    ])
+    assert len(store.turns()) == 2
+    assert store.turns()[0]["content"] == "hello"
+
+
+def test_memory_store_clear_empties():
+    store = MemoryStore(max_turns=10)
+    store.add_turn("user", "test")
+    assert len(store.turns()) == 1
+    store.clear()
+    assert len(store.turns()) == 0

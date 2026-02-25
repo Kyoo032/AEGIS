@@ -1,0 +1,38 @@
+name: Integration
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install uv
+        run: pip install uv
+
+      - name: Sync dependencies
+        run: uv sync --dev
+
+      - name: Integration tests
+        run: >
+          .venv/bin/pytest
+          -p no:deepeval
+          tests/test_integration.py
+          tests/test_cli.py
+          -v
+
+      - name: Schema validation
+        run: >
+          .venv/bin/python scripts/validate_reports.py
+          --schema report
+          --input reports/sample_baseline_report.json

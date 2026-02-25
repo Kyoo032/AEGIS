@@ -5,10 +5,11 @@ import json
 import logging
 import traceback
 from collections import defaultdict
+from collections.abc import Callable
 from datetime import UTC, datetime
 from importlib import import_module
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 from uuid import uuid4
 
 from aegis.attacks.base import BaseAttackModule
@@ -154,7 +155,7 @@ class AEGISOrchestrator:
             label = "+".join(names)
             reports[label] = self._run_scenario(
                 label,
-                lambda n=names, l=label: self.run_with_defenses(n, label=l),
+                lambda n=names, lbl=label: self.run_with_defenses(n, label=lbl),
             )
 
         baseline_rate = reports["baseline"].attack_success_rate if "baseline" in reports else 0.0
