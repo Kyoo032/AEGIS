@@ -2,48 +2,107 @@
 
 Security testing framework for auditing agentic AI systems. Targets OWASP LLM Top 10 (2025), Agentic Top 10 (2026), and MCP Top 10 (2025).
 
+## Architecture
+
+```mermaid
+graph TB
+    CLI["CLI (typer)"]
+    ORCH["Orchestrator"]
+    ATK["Attack Modules (8)"]
+    AGENT["Agent Testbed"]
+    EVAL["Evaluation Pipeline"]
+    DEF["Defense Modules (5)"]
+    RPT["Report Generator"]
+
+    CLI --> ORCH
+    ORCH --> ATK
+    ORCH --> AGENT
+    ORCH --> EVAL
+    ORCH --> DEF
+    ORCH --> RPT
+    ATK -->|payloads| AGENT
+    AGENT -->|responses| EVAL
+    DEF -->|intercept| AGENT
+    EVAL -->|results| RPT
+```
+
+## Prerequisites
+
+- Python 3.11+
+- [uv](https://docs.astral.sh/uv/) package manager
+- [Ollama](https://ollama.ai/) (optional — required for live agent testing)
+
+## Installation
+
+```bash
+git clone https://github.com/your-org/aegis.git
+cd aegis
+uv sync --dev
+```
+
 ## Quick Start
 
 ```bash
-uv sync --dev
-uv run pytest
-uv run aegis --help
+# Run a full baseline scan
+uv run aegis scan
+
+# Attack with a specific module
+uv run aegis attack --module llm01_prompt_inject
+
+# Test a defense
+uv run aegis defend --defense input_validator
+
+# Run the full defense matrix
+uv run aegis matrix
+
+# Generate an HTML report from results
+uv run aegis report --format html
 ```
 
 ## Primary Local Models
 
-- Target agent baseline: local Ollama model `qwen3:4b`
-- Judge/lightweight baseline: local Ollama model `qwen3:1.7b`
-- Default local Ollama endpoint: `http://localhost:11434`
+| Role | Model | Purpose |
+|------|-------|---------|
+| Target agent | `qwen3:4b` (Ollama) | Baseline vulnerability testing |
+| Judge | `qwen3:1.7b` (Ollama) | Lightweight scoring/evaluation |
 
-AEGIS is tuned for local-first runs using these two models as the reference setup.
+Default Ollama endpoint: `http://localhost:11434`
 
-## Validation Policy
+## Attack Modules
 
-- Day 1-4 runtime validation was completed manually on February 18-19, 2026.
-- Verified components: Ollama models `qwen3:4b` and `qwen3:1.7b`, plus Promptfoo, Garak, and Augustus.
-- Baseline evidence:
-  - `docs/augustus_scan_results.jsonl`
-  - `docs/augustus_scan_report.html`
-  - `docs/PROBE_CATALOG_REVIEW.md`
-  - `promptfoo_configs/llm01_basic.yaml`
-- Default policy: avoid re-running long external probe suites for routine Day 1-4 checks.
-- Re-run long probes only when one of these conditions is true:
-  - MCP server or tool behavior changed.
-  - Judge model/provider configuration changed.
-  - Payload or rule-detection logic changed in a way that affects probe comparability.
-  - Existing evidence artifacts are missing or stale for the target branch.
+| Module | OWASP ID | Category |
+|--------|----------|----------|
+| `llm01_prompt_inject` | LLM01 | Prompt Injection |
+| `llm02_data_disclosure` | LLM02 | Sensitive Information Disclosure |
+| `asi01_goal_hijack` | ASI01 | Agent Goal Hijacking |
+| `asi02_tool_misuse` | ASI02 | Tool Misuse & Exploitation |
+| `asi04_supply_chain` | ASI04 | Supply Chain Vulnerabilities |
+| `asi05_code_exec` | ASI05 | Unexpected Code Execution |
+| `asi06_memory_poison` | ASI06 | Memory & Context Poisoning |
+| `mcp06_cmd_injection` | MCP06 | Command Injection via MCP |
+
+## Defense Modules
+
+| Defense | Mechanism | Baseline Delta |
+|---------|-----------|----------------|
+| `input_validator` | Prompt sanitization & pattern blocking | -65.52% ASR |
+| `output_filter` | Response content filtering | +0.00% |
+| `tool_boundary` | Tool parameter validation & scope enforcement | -7.35% |
+| `mcp_integrity` | MCP manifest integrity verification | +0.00% |
+| `permission_enforcer` | Cross-tool flow permission policies | +0.00% |
+
+Best layered combination: `input_validator + output_filter + tool_boundary` → 79.31% ASR reduction.
 
 ## Agent Profiles
 
 Four preconfigured profiles in `config.yaml`:
 
-| Profile | Tools | RAG/Memory | Use case |
+| Profile | Tools | RAG/Memory | Use Case |
 |---------|-------|------------|----------|
 | `default` | All 6 MCP servers | Enabled | Baseline vulnerability testing |
 | `hardened` | Restricted set | Disabled | Defense evaluation |
 | `minimal` | Filesystem only | Disabled | Isolated attack testing |
-| `supply_chain` | Includes `evil` MCP server | Enabled | Day 5 supply chain/poisoning validation |
+| `supply_chain` | Includes `evil` MCP server | Enabled | Supply chain/poisoning validation |
 
 ```bash
 uv run aegis scan --profile minimal
@@ -51,10 +110,33 @@ uv run aegis scan --profile minimal
 
 ## MockAgent (Offline Testing)
 
-`MockAgent` implements `AgentInterface` with canned responses for deterministic offline testing — no Ollama required. Useful for CI and unit tests.
+`MockAgent` implements `AgentInterface` with canned responses for deterministic offline testing — no Ollama required. Used in CI and unit tests.
 
-## Security Defaults (Migration Notes)
+## Security Defaults
 
-- `code_exec` MCP tool is now disabled by default (`testbed.security.code_exec_enabled: false`).
-- HTTP MCP requests are strict allowlist by default (`testbed.security.http_allowlist` + private-network blocking).
-- New hardening knobs live under `testbed.security` in `aegis/config.yaml`.
+- `code_exec` MCP tool disabled by default (`testbed.security.code_exec_enabled: false`)
+- HTTP MCP requests use strict allowlist (`testbed.security.http_allowlist` + private-network blocking)
+- Hardening knobs under `testbed.security` in `aegis/config.yaml`
+
+## Testing
+
+```bash
+# Run tests with coverage
+uv run pytest --cov=aegis --cov-report=term-missing --cov-fail-under=80
+
+# Lint
+uv run ruff check aegis/
+
+# Schema validation
+uv run python scripts/validate_reports.py --schema report --input reports/sample_baseline_report.json
+```
+
+## Documentation
+
+- [FINDINGS.md](docs/FINDINGS.md) — Baseline attack results and analysis
+- [METHODOLOGY.md](docs/METHODOLOGY.md) — Evaluation methodology and scoring
+- [DEFENSE_EVALUATION.md](docs/DEFENSE_EVALUATION.md) — Defense effectiveness analysis
+
+## License
+
+MIT

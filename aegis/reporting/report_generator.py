@@ -17,6 +17,7 @@ from aegis.models import (
     EvaluationResult,
     Finding,
     OWASPCategoryResult,
+    OWASPMapping,
     SecurityReport,
     Severity,
 )
@@ -94,6 +95,11 @@ class ReportGenerator:
                 description=" | ".join(description_parts),
                 evidence=evidence[:5],
                 recommendation=_RECOMMENDATIONS_BY_SEVERITY[payload.severity],
+                owasp_mapping=OWASPMapping(
+                    owasp_id=payload.owasp_id,
+                    owasp_name=owasp_info["name"],
+                    mitre_atlas_id=payload.atlas_technique,
+                ),
             )
             findings.append(finding)
             recommendations.add(_RECOMMENDATIONS_BY_SEVERITY[payload.severity])

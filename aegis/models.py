@@ -156,6 +156,16 @@ class EvaluationResult(BaseModel):
     atlas_technique: str | None = None
 
 
+class OWASPMapping(BaseModel):
+    """Maps a finding to OWASP and MITRE ATLAS identifiers."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    owasp_id: str
+    owasp_name: str
+    mitre_atlas_id: str | None = None
+
+
 class Finding(BaseModel):
     """A key finding for the security report."""
 
@@ -171,6 +181,7 @@ class Finding(BaseModel):
     evidence: list[str]
     recommendation: str
     delta_vs_baseline: float | None = None
+    owasp_mapping: OWASPMapping | None = None
 
 
 class OWASPCategoryResult(BaseModel):

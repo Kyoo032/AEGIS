@@ -11,5 +11,14 @@ build/
 .ruff_cache/
 .pytest_cache/
 .mypy_cache/
-reports/
 *.db
+.coverage
+.deepeval/
+
+# Ephemeral run artifacts
+reports/attack_results_*.jsonl
+reports/day*_*
+
+# Keep sample reports
+!reports/sample_baseline_report.json
+!reports/sample_baseline_report.html
