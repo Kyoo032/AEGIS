@@ -119,6 +119,31 @@
 | 12 | Create `.github/workflows/ci.yml` — run pytest on push to develop/main. Create `.github/workflows/integration.yml` — run integration test. Write `README.md`: project description, architecture diagram (Mermaid), installation, quickstart. [OPTIONAL] Docker compose file for Ollama + AEGIS. | Complete `docs/DEFENSE_EVALUATION.md` — defense comparison analysis, bypass techniques. Create `promptfoo_configs/basic_redteam.yaml` for automated red team runs. Prepare payload dataset in `datasets/` directory. Cross-review Backend Lead's README for technical accuracy. | CI/CD pipeline is green. All documentation drafted and reviewed. README complete. |
 | 13 | Test installation from scratch: fresh clone → `uv sync` → `aegis scan` works. Quick-start examples in README. Pin dependency versions in `pyproject.toml`. Run full `pytest` suite — target 80%+ coverage. `ruff check aegis/` — fix all lint issues. | Final QA on all report outputs (JSON, HTML, PDF). Sample report committed to repo. Verify no secrets/credentials in any committed file. [OPTIONAL] Blog post draft. Cross-review documentation with Backend Lead. | Fresh clone → install → scan works. 80%+ test coverage. Clean `ruff check`. No secrets committed. All report outputs verified. |
 
+### Phase 6 Completion Status (Locked)
+
+- Days 11-13 publication work complete.
+- Day 12 deliverables:
+  - `.github/workflows/ci.yml`: ruff lint + pytest --cov --cov-fail-under=80
+  - `.github/workflows/integration.yml`: integration + CLI tests + schema validation
+  - `README.md` rewritten with Mermaid architecture diagram, module tables, 5 quick start examples
+  - `promptfoo_configs/basic_redteam.yaml`: 13 tests across LLM01/ASI01/ASI02/MCP06
+  - `datasets/payloads/`: 8 JSON payload files (83 total payloads)
+  - `docs/DEFENSE_EVALUATION.md` expanded with per-defense bypass analysis and recommendations matrix
+- Day 13 deliverables:
+  - All dependencies pinned to exact `==X.Y.Z` versions
+  - `ruff check aegis/` clean (0 errors)
+  - 89% test coverage (threshold: 80%)
+  - Fresh clone install verified: `uv sync` → `aegis --help` → `pytest --cov` all pass
+  - `OWASPMapping` model added to align Pydantic with JSON schema
+  - Sample report committed: `reports/sample_baseline_report.json` + `.html`
+  - Security audit: no hardcoded secrets, all payloads use safe example domains
+- Gate checks satisfied:
+  - `ruff check aegis/` → All checks passed
+  - `pytest --cov --cov-fail-under=80` → 89% coverage, 482 passed
+  - `aegis --help` → exit 0
+  - `validate_reports.py --schema report` → OK
+  - No secrets found via grep scan
+
 ---
 
 ## Phase 7: Release (Day 14)
