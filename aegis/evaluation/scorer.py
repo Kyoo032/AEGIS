@@ -11,7 +11,7 @@ from aegis.models import AttackResult, EvaluationResult, ScoringMethod
 
 
 class RuleBasedScorer(Scorer):
-    """Scores attack results using the RuleDetector's 8 detection rules.
+    """Scores attack results using the RuleDetector's detection rules.
 
     An attack is considered successful if any rule matches.
     Confidence scales with the number of matches (capped at 1.0).

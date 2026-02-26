@@ -103,6 +103,12 @@ class AgentResponse(BaseModel):
     memory_state: dict[str, Any] | None = None
     """Agent memory after interaction"""
 
+    retrieval_trace: list[dict[str, Any]] | None = None
+    """Structured trace of KB retrieval candidates and inclusion decisions"""
+
+    kb_state: dict[str, Any] | None = None
+    """Knowledge-base runtime snapshot after interaction"""
+
     raw_llm_output: str | None = None
     """Raw LLM completion"""
 

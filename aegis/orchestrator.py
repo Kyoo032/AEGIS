@@ -273,6 +273,8 @@ class AEGISOrchestrator:
         except Exception as exc:
             errors.append(_make_error_record(module="evaluation_pipeline", phase="evaluate", exc=exc))
             logger.exception("Evaluation pipeline failed")
+            if getattr(exc, "fatal", False):
+                raise
             eval_results = []
 
         return self._build_report(eval_results, defense_name=defense_name, run_errors=errors)
@@ -292,6 +294,13 @@ class AEGISOrchestrator:
             grouped[eval_result.owasp_id].append(eval_result)
 
             payload = eval_result.attack_result.payload
+            retrieval_trace = eval_result.attack_result.response.retrieval_trace or []
+            included_hits = [
+                item for item in retrieval_trace if isinstance(item, dict) and bool(item.get("included"))
+            ]
+            poisoned_included = [
+                item for item in included_hits if bool(item.get("is_poisoned"))
+            ]
             probe_results.append(
                 {
                     "probe_id": payload.id,
@@ -303,6 +312,9 @@ class AEGISOrchestrator:
                     "score": eval_result.confidence,
                     "score_method": str(eval_result.scoring_method),
                     "response_snippet": _truncate_text(eval_result.attack_result.response.final_output),
+                    "retrieval_trace_count": len(retrieval_trace),
+                    "retrieval_included_count": len(included_hits),
+                    "retrieval_poisoned_included_count": len(poisoned_included),
                 }
             )
 
@@ -427,19 +439,35 @@ class AEGISOrchestrator:
     def _build_llm_judge_scorer(self) -> Scorer:
         from aegis.evaluation.llm_judge import LLMJudgeScorer
 
-        judge_model = str(self.config["evaluation"].get("judge_model", "qwen3:1.7b"))
+        eval_cfg = self.config["evaluation"]
+        judge_model = str(eval_cfg.get("judge_model", "qwen3:1.7b"))
+        judge_timeout_seconds = float(eval_cfg.get("judge_timeout_seconds", 30))
+        judge_max_retries = int(eval_cfg.get("judge_max_retries", 1))
+        judge_num_predict = int(eval_cfg.get("judge_num_predict", 64))
+        judge_keep_alive = str(eval_cfg.get("judge_keep_alive", "15m"))
+        judge_hard_fail = bool(eval_cfg.get("judge_hard_fail", True))
         base_url = str(
             self.config["testbed"]["provider"].get(
                 "ollama_base_url", "http://localhost:11434"
             )
         )
-        return LLMJudgeScorer(judge_model=judge_model, base_url=base_url)
+        return LLMJudgeScorer(
+            judge_model=judge_model,
+            base_url=base_url,
+            timeout_seconds=judge_timeout_seconds,
+            max_retries=judge_max_retries,
+            num_predict=judge_num_predict,
+            keep_alive=judge_keep_alive,
+            hard_fail=judge_hard_fail,
+        )
 
     def _run_scenario(self, name: str, runner: Callable[[], SecurityReport]) -> SecurityReport:
         """Run one scenario and never raise, returning an error report on failure."""
         try:
             return runner()
         except Exception as exc:
+            if getattr(exc, "fatal", False):
+                raise
             logger.exception("Scenario '%s' failed", name)
             error = _make_error_record(module=name, phase="scenario", exc=exc)
             return self._build_empty_report(defense_name=name if name != "baseline" else None, run_errors=[error])

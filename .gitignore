@@ -14,10 +14,15 @@ build/
 *.db
 .coverage
 .deepeval/
+.claude/
+
+# Generated KB corpus (users run build_kb_corpus.py)
+datasets/kb/
 
 # Ephemeral run artifacts
+reports/*.json
+reports/*.html
 reports/attack_results_*.jsonl
-reports/day*_*
 
 # Keep sample reports
 !reports/sample_baseline_report.json

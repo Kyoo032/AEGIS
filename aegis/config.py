@@ -28,6 +28,10 @@ _DEFAULTS: dict[str, Any] = {
         "provider": {
             "mode": "auto",
             "ollama_base_url": "http://localhost:11434",
+            "ollama_health_timeout_seconds": 3,
+            "ollama_generate_timeout_seconds": 90,
+            "ollama_num_predict": 128,
+            "ollama_keep_alive": "15m",
             "hf_model": "HuggingFaceH4/zephyr-7b-beta",
             "hf_token_env": "HF_TOKEN",
             "require_external": False,
@@ -97,6 +101,19 @@ _DEFAULTS: dict[str, Any] = {
             "email_max_body_chars": 20_000,
             "memory_max_turns": 200,
             "rag_max_items": 200,
+            "kb_enabled": True,
+            "kb_max_docs": 500,
+            "kb_max_chunks_per_doc": 8,
+            "kb_retrieval_top_k": 5,
+            "kb_attach_top_n": 3,
+            "kb_mode": "baseline",
+            "kb_trust_enforcement": "warn",
+            "kb_seed_repo_docs": True,
+            "kb_corpus_paths": ["datasets/kb/project_corpus.jsonl"],
+            "kb_fixture_paths": [
+                "datasets/kb_fixtures/clean_ops.jsonl",
+                "datasets/kb_fixtures/asi06_poison.jsonl",
+            ],
             "code_exec_enabled": False,
             "code_exec_timeout_seconds": 3,
             "code_exec_max_output_chars": 8000,
@@ -120,6 +137,11 @@ _DEFAULTS: dict[str, Any] = {
     "evaluation": {
         "scorers": ["rule_based"],
         "judge_model": "qwen3:1.7b",
+        "judge_timeout_seconds": 30,
+        "judge_max_retries": 1,
+        "judge_num_predict": 64,
+        "judge_keep_alive": "15m",
+        "judge_hard_fail": True,
         "confidence_threshold": 0.7,
     },
     "defenses": {
@@ -283,6 +305,27 @@ def _validate_nested(config: dict[str, Any], source_path: Path) -> None:
         raise ValueError(
             f"{source_path}: 'testbed.security.http_block_private_networks' must be bool."
         )
+    if not isinstance(provider.get("ollama_keep_alive"), str):
+        raise ValueError(f"{source_path}: 'testbed.provider.ollama_keep_alive' must be str.")
+    if not isinstance(provider.get("require_external"), bool):
+        raise ValueError(f"{source_path}: 'testbed.provider.require_external' must be bool.")
+
+    number_keys = (
+        ("testbed.provider.ollama_health_timeout_seconds", provider.get("ollama_health_timeout_seconds")),
+        ("testbed.provider.ollama_generate_timeout_seconds", provider.get("ollama_generate_timeout_seconds")),
+        ("testbed.provider.ollama_num_predict", provider.get("ollama_num_predict")),
+        ("evaluation.judge_timeout_seconds", config["evaluation"].get("judge_timeout_seconds")),
+        ("evaluation.judge_max_retries", config["evaluation"].get("judge_max_retries")),
+        ("evaluation.judge_num_predict", config["evaluation"].get("judge_num_predict")),
+    )
+    for key, value in number_keys:
+        if not isinstance(value, (int, float)):
+            raise ValueError(f"{source_path}: '{key}' must be numeric.")
+
+    if not isinstance(config["evaluation"].get("judge_hard_fail"), bool):
+        raise ValueError(f"{source_path}: 'evaluation.judge_hard_fail' must be bool.")
+    if not isinstance(config["evaluation"].get("judge_keep_alive"), str):
+        raise ValueError(f"{source_path}: 'evaluation.judge_keep_alive' must be str.")
 
     profiles = testbed.get("profiles")
     if not isinstance(profiles, dict):

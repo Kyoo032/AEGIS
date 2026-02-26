@@ -146,13 +146,25 @@
 
 ---
 
-## Phase 7: Release (Day 14)
+## Phase 7: Release (Day 14) — LOCKED
 
 **Goal:** Ship AEGIS v1.0.
 
 | Day | Everyone | Done When |
 |-----|----------|-----------|
 | 14 | Pull develop. All tests pass (`pytest` green, `ruff check` clean). Run `aegis scan` end-to-end — verify JSON + HTML reports. Run `aegis matrix` for full attack-defense comparison. Review README — does a stranger understand what this is and how to use it? Review all `docs/` files: METHODOLOGY, FINDINGS, DEFENSE_EVALUATION. Add LICENSE file. Pin dependency versions. Verify no secrets committed. Create `CHANGELOG.md` with v1.0 highlights. Verify clean install: fresh clone → `uv sync` → `aegis scan` works. Tag v1.0: `git tag -a v1.0 -m "AEGIS v1.0 — Initial release"`. Merge develop → main. [OPTIONAL] Upload payload dataset to HuggingFace. Announce on LinkedIn, relevant forums. Submit to OWASP working groups if appropriate. | **AEGIS v1.0 is shipped:** repo is public, documentation is complete, reports generate cleanly, a stranger can clone and run a complete scan without asking questions. |
+
+- Gate checks satisfied:
+  - `ruff check aegis/` → All checks passed
+  - `pytest --cov --cov-fail-under=80` → 89.15% coverage, 549 passed
+  - `aegis --help` → exit 0
+  - LICENSE file created (MIT)
+  - CHANGELOG.md created with v1.0 highlights
+  - All dependencies pinned to exact versions (no unpinned ranges)
+  - No secrets found via grep scan
+  - README reviewed — comprehensive with architecture, install, CLI, profiles
+  - docs/ reviewed — METHODOLOGY.md, FINDINGS.md, DEFENSE_EVALUATION.md complete
+  - Version bumped to 1.0.0
 
 ---
 
