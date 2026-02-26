@@ -239,6 +239,22 @@ class TestResolutionLogic:
         assert len(results) == 1
         assert results[0].confidence == 0.7
 
+    def test_fatal_scorer_exception_propagates(self):
+        """Fatal scorer exceptions should stop evaluation immediately."""
+        from aegis.evaluation.pipeline import EvaluationPipeline
+
+        class _FatalScorerError(RuntimeError):
+            fatal = True
+
+        ar = _make_attack_result()
+        fatal_scorer = MagicMock(spec=Scorer)
+        fatal_scorer.evaluate.side_effect = _FatalScorerError("judge hard-fail")
+        good_scorer = _mock_scorer(_make_eval_result(ar, confidence=0.4))
+
+        pipeline = EvaluationPipeline(scorers=[fatal_scorer, good_scorer])
+        with pytest.raises(_FatalScorerError):
+            pipeline.evaluate([ar])
+
 
 class TestDisagreementLogging:
     def test_pipeline_logs_disagreements(self, caplog: pytest.LogCaptureFixture):

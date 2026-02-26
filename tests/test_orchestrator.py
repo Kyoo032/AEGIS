@@ -7,6 +7,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 from aegis.evaluation.llm_judge import LLMJudgeScorer
 from aegis.interfaces.agent import AgentInterface
 from aegis.interfaces.attack import AttackModule
@@ -130,6 +132,26 @@ def test_score_results_from_file(tmp_path: Path):
     assert "LLM01" in report.results_by_owasp
 
 
+def test_score_results_propagates_fatal_scorer_error(tmp_path: Path):
+    class _FatalEvalError(RuntimeError):
+        fatal = True
+
+    class _FatalScorer:
+        def evaluate(self, result):  # noqa: ANN001
+            raise _FatalEvalError("judge hard-fail")
+
+    jsonl_path = tmp_path / "results.jsonl"
+    results = [_make_attack_result("LLM01-TEST-FATAL")]
+    jsonl_path.write_text(
+        "\n".join(r.model_dump_json() for r in results) + "\n",
+        encoding="utf-8",
+    )
+
+    orchestrator = AEGISOrchestrator(scorers=[_FatalScorer()])
+    with pytest.raises(_FatalEvalError):
+        orchestrator.score_results(jsonl_path, defense_name=None)
+
+
 def test_decoupled_round_trip(tmp_path: Path):
     """run_attacks() then score_results() produces same shape as run_baseline()."""
     orchestrator = AEGISOrchestrator()
@@ -223,6 +245,11 @@ def test_load_scorers_includes_llm_judge():
     assert llm_scorer._judge_model == orchestrator.config["evaluation"]["judge_model"]
     expected_url = orchestrator.config["testbed"]["provider"]["ollama_base_url"]
     assert llm_scorer._base_url == expected_url
+    assert llm_scorer._timeout_seconds == orchestrator.config["evaluation"]["judge_timeout_seconds"]
+    assert llm_scorer._max_retries == orchestrator.config["evaluation"]["judge_max_retries"]
+    assert llm_scorer._num_predict == orchestrator.config["evaluation"]["judge_num_predict"]
+    assert llm_scorer._keep_alive == orchestrator.config["evaluation"]["judge_keep_alive"]
+    assert llm_scorer._hard_fail is orchestrator.config["evaluation"]["judge_hard_fail"]
 
 
 def test_main_help():

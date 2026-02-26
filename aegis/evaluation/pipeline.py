@@ -2,7 +2,7 @@
 
 When scorers disagree the higher-confidence result wins.
 On a tie, rule-based scorer takes precedence.
-If a scorer raises, its result is skipped and the others proceed.
+If a scorer raises, its result is skipped unless the exception is marked fatal.
 """
 from __future__ import annotations
 
@@ -39,10 +39,12 @@ class EvaluationPipeline:
     # ------------------------------------------------------------------
 
     def _score_one(self, scorer: Scorer, ar: AttackResult) -> EvaluationResult | None:
-        """Run a single scorer, returning None if it raises."""
+        """Run a single scorer, returning None on non-fatal scorer errors."""
         try:
             return scorer.evaluate(ar)
         except Exception as exc:
+            if getattr(exc, "fatal", False):
+                raise
             logger.warning("Scorer %r raised on result %r: %s", scorer, ar.payload.id, exc)
             return None
 

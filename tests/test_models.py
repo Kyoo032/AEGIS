@@ -198,6 +198,8 @@ class TestAgentResponse:
     def test_optional_fields_default_correctly(self, sample_agent_response):
         r = AgentResponse(**sample_agent_response)
         assert r.memory_state is None
+        assert r.retrieval_trace is None
+        assert r.kb_state is None
         assert r.raw_llm_output is None
         assert r.error is None
         assert r.duration_ms == 0

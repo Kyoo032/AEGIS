@@ -1,4 +1,4 @@
-"""Tests for aegis/evaluation/rule_detector.py — 13 detection rules + RuleDetector.
+"""Tests for aegis/evaluation/rule_detector.py detection rules + RuleDetector.
 
 Each rule is tested with positive (should detect) and negative (should not detect) cases.
 """
@@ -18,12 +18,14 @@ from aegis.evaluation.rule_detector import (
     detect_instruction_compliance,
     detect_parameter_injection,
     detect_persona_adoption,
+    detect_poisoned_retrieval,
     detect_sensitive_data_in_email,
     detect_sensitive_file_access,
     detect_supply_chain_indicators,
     detect_suspicious_tool_params,
     detect_tool_chaining,
     detect_tool_output_injection,
+    detect_untrusted_retrieval_dominance,
 )
 from aegis.models import (
     AgentResponse,
@@ -45,6 +47,7 @@ def _make_result(
     payload_messages: list[dict[str, str]] | None = None,
     payload_metadata: dict | None = None,
     defense_active: str | None = None,
+    retrieval_trace: list[dict] | None = None,
 ) -> AttackResult:
     """Build a minimal AttackResult for rule tests."""
     tc_models = [
@@ -78,6 +81,7 @@ def _make_result(
             final_output=final_output,
             tool_calls=tc_models,
             defense_active=defense_active,
+            retrieval_trace=retrieval_trace,
         ),
         timestamp=datetime.now(UTC),
         run_id="test-run",
@@ -573,6 +577,57 @@ class TestDetectToolOutputInjection:
         assert match.matched is False
 
 
+class TestDetectRetrievalSignals:
+    def test_poisoned_retrieval_detects_included_poison(self):
+        result = _make_result(
+            retrieval_trace=[
+                {
+                    "doc_id": "kb-000001",
+                    "included": True,
+                    "is_poisoned": True,
+                    "trust_level": "untrusted",
+                }
+            ]
+        )
+        match = detect_poisoned_retrieval(result)
+        assert match.matched is True
+
+    def test_poisoned_retrieval_ignores_blocked_poison(self):
+        result = _make_result(
+            retrieval_trace=[
+                {
+                    "doc_id": "kb-000001",
+                    "included": False,
+                    "is_poisoned": True,
+                    "trust_level": "untrusted",
+                }
+            ]
+        )
+        match = detect_poisoned_retrieval(result)
+        assert match.matched is False
+
+    def test_untrusted_retrieval_dominance_detects_majority(self):
+        result = _make_result(
+            retrieval_trace=[
+                {"doc_id": "1", "included": True, "is_poisoned": False, "trust_level": "untrusted"},
+                {"doc_id": "2", "included": True, "is_poisoned": False, "trust_level": "untrusted"},
+                {"doc_id": "3", "included": True, "is_poisoned": False, "trust_level": "trusted"},
+            ]
+        )
+        match = detect_untrusted_retrieval_dominance(result)
+        assert match.matched is True
+
+    def test_untrusted_retrieval_dominance_ignores_balanced_mix(self):
+        result = _make_result(
+            retrieval_trace=[
+                {"doc_id": "1", "included": True, "is_poisoned": False, "trust_level": "trusted"},
+                {"doc_id": "2", "included": True, "is_poisoned": False, "trust_level": "untrusted"},
+            ]
+        )
+        match = detect_untrusted_retrieval_dominance(result)
+        assert match.matched is False
+
+
 # ---------------------------------------------------------------------------
 # RuleDetector
 # ---------------------------------------------------------------------------
@@ -613,8 +668,8 @@ class TestRuleDetector:
             detector.run_named("nonexistent_rule", result)
 
     def test_rule_count(self):
-        """RuleDetector should have exactly 13 rules."""
+        """RuleDetector should include retrieval-aware rules."""
         detector = RuleDetector()
         result = _make_result()
         matches = detector.run_all(result)
-        assert len(matches) == 13
+        assert len(matches) == 15

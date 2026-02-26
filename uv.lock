@@ -15,7 +15,7 @@ resolution-markers = [
 
 [[package]]
 name = "aegis"
-version = "0.1.0"
+version = "1.0.0"
 source = { editable = "." }
 dependencies = [
     { name = "chromadb" },
@@ -51,30 +51,30 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "chromadb", specifier = ">=0.5.0" },
-    { name = "deepeval", specifier = ">=1.0.0" },
-    { name = "fastmcp", specifier = ">=2.0.0,<3" },
-    { name = "jinja2", specifier = ">=3.1.0" },
-    { name = "jsonschema", marker = "extra == 'dev'", specifier = ">=4.23.0" },
-    { name = "langchain", specifier = ">=0.3.0,<0.4" },
-    { name = "langchain-community", specifier = ">=0.3.0,<0.4" },
-    { name = "langgraph", specifier = ">=0.2.0,<0.3" },
-    { name = "pydantic", specifier = ">=2.7.0,<3" },
-    { name = "pyrit", marker = "extra == 'redteam'", specifier = ">=0.5.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
-    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=5.0" },
-    { name = "pyyaml", specifier = ">=6.0" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.4.0" },
-    { name = "typer", specifier = ">=0.12.0" },
+    { name = "chromadb", specifier = "==1.5.0" },
+    { name = "deepeval", specifier = "==3.8.4" },
+    { name = "fastmcp", specifier = "==2.14.5" },
+    { name = "jinja2", specifier = "==3.1.6" },
+    { name = "jsonschema", marker = "extra == 'dev'", specifier = "==4.26.0" },
+    { name = "langchain", specifier = "==0.3.27" },
+    { name = "langchain-community", specifier = "==0.3.31" },
+    { name = "langgraph", specifier = "==0.2.76" },
+    { name = "pydantic", specifier = "==2.12.5" },
+    { name = "pyrit", marker = "extra == 'redteam'", specifier = "==0.11.0" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = "==9.0.2" },
+    { name = "pytest-cov", marker = "extra == 'dev'", specifier = "==7.0.0" },
+    { name = "pyyaml", specifier = "==6.0.3" },
+    { name = "ruff", marker = "extra == 'dev'", specifier = "==0.15.1" },
+    { name = "typer", specifier = "==0.23.1" },
 ]
 provides-extras = ["dev", "redteam"]
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "coverage", specifier = ">=7.13.4" },
-    { name = "jsonschema", specifier = ">=4.23.0" },
-    { name = "pytest-cov", specifier = ">=7.0.0" },
-    { name = "ruff", specifier = ">=0.15.1" },
+    { name = "coverage", specifier = "==7.13.4" },
+    { name = "jsonschema", specifier = "==4.26.0" },
+    { name = "pytest-cov", specifier = "==7.0.0" },
+    { name = "ruff", specifier = "==0.15.1" },
 ]
 
 [[package]]

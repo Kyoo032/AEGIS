@@ -10,6 +10,10 @@ testbed:
   provider:
     mode: "auto"                    # auto | ollama | huggingface | offline
     ollama_base_url: "http://localhost:11434"
+    ollama_health_timeout_seconds: 3
+    ollama_generate_timeout_seconds: 90
+    ollama_num_predict: 128
+    ollama_keep_alive: "15m"
     hf_model: "HuggingFaceH4/zephyr-7b-beta"
     hf_token_env: "HF_TOKEN"
     require_external: false         # true => fail if no Ollama/HF provider is available
@@ -71,6 +75,19 @@ testbed:
     email_max_body_chars: 20000
     memory_max_turns: 200
     rag_max_items: 200
+    kb_enabled: true
+    kb_max_docs: 500
+    kb_max_chunks_per_doc: 8
+    kb_retrieval_top_k: 5
+    kb_attach_top_n: 3
+    kb_mode: "baseline"             # baseline | attack_sim | hardened
+    kb_trust_enforcement: "warn"    # off | warn | strict
+    kb_seed_repo_docs: true
+    kb_corpus_paths:
+      - "datasets/kb/project_corpus.jsonl"
+    kb_fixture_paths:
+      - "datasets/kb_fixtures/clean_ops.jsonl"
+      - "datasets/kb_fixtures/asi06_poison.jsonl"
     code_exec_enabled: false
     code_exec_timeout_seconds: 3
     code_exec_max_output_chars: 8000
@@ -94,6 +111,11 @@ evaluation:
     - rule_based
     - llm_judge
   judge_model: "qwen3:1.7b"
+  judge_timeout_seconds: 30
+  judge_max_retries: 1
+  judge_num_predict: 64
+  judge_keep_alive: "15m"
+  judge_hard_fail: true
   confidence_threshold: 0.7
 
 defenses:
