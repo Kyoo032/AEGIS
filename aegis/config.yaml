@@ -111,8 +111,8 @@ evaluation:
     - rule_based
     - llm_judge
   judge_model: "qwen3:1.7b"
-  judge_timeout_seconds: 30
-  judge_max_retries: 1
+  judge_timeout_seconds: 120
+  judge_max_retries: 3
   judge_num_predict: 64
   judge_keep_alive: "15m"
   judge_hard_fail: true

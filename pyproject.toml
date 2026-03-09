@@ -33,6 +33,11 @@ dev = [
 redteam = [
     "pyrit==0.11.0",
 ]
+dashboard = [
+    "streamlit>=1.30,<2.0",
+    "plotly>=5.18",
+    "pandas>=2.1",
+]
 
 [project.scripts]
 aegis = "aegis.cli:app"

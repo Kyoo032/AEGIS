@@ -4,7 +4,7 @@
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-549%20passed-brightgreen)]()
+[![Tests](https://img.shields.io/badge/tests-584%20passed-brightgreen)]()
 [![Coverage](https://img.shields.io/badge/coverage-89%25-brightgreen)]()
 
 ---
@@ -15,7 +15,7 @@ Modern AI agents can use tools (read files, query databases, send emails, execut
 
 > **"If someone tries to trick my AI agent into doing something malicious, will it comply?"**
 
-AEGIS sends **86 attack payloads** across 8 categories at your agent, scores whether each attack succeeded, and generates a security report with findings and recommendations.
+AEGIS sends **86 attack payloads** across 8 categories (68 core + 18 extended) at your agent, scores whether each attack succeeded, and generates a security report with findings and recommendations.
 
 ---
 
@@ -76,23 +76,40 @@ graph TB
 
 ## 🚀 Quick Start
 
-### Prerequisites
+### 🐳 Docker Compose (Recommended)
 
-- **Python 3.11+**
-- **[uv](https://docs.astral.sh/uv/)** package manager
-- **[Ollama](https://ollama.ai/)** (for live agent testing — optional for unit tests)
-
-### Install
+The fastest way to get started — no Python or Ollama install needed:
 
 ```bash
-git clone https://github.com/your-org/aegis.git
-cd aegis
-uv sync --dev
+git clone https://github.com/Kyoo032/AEGIS.git
+cd AEGIS
+
+# Build images
+docker compose build
+
+# Pull models + run a security scan
+docker compose --profile scan up
+
+# Start the interactive dashboard (http://localhost:8501)
+docker compose --profile dashboard up dashboard -d
+
+# Teardown
+docker compose --profile scan --profile dashboard down
 ```
 
-### Pull models (if using Ollama)
+Docker Compose handles everything: Ollama model server, model downloads, scan execution, and the Streamlit dashboard. GPU acceleration is enabled automatically if an NVIDIA GPU is available.
+
+### 🐍 Manual Install (Alternative)
+
+If you prefer running directly on your machine:
 
 ```bash
+# Prerequisites: Python 3.11+, uv, Ollama
+git clone https://github.com/Kyoo032/AEGIS.git
+cd AEGIS
+uv sync --dev
+
+# Pull models
 ollama pull qwen3:4b      # Target agent
 ollama pull qwen3:1.7b    # Evaluation judge
 ```
@@ -100,21 +117,25 @@ ollama pull qwen3:1.7b    # Evaluation judge
 ### Run your first scan
 
 ```bash
-# 🔍 Full baseline security scan
+# Full baseline security scan
 uv run aegis scan
 
-# 💥 Run a specific attack module
+# Run a specific attack module
 uv run aegis attack --module llm01_prompt_inject
 
-# 🛡️ Test a defense
+# Test a defense
 uv run aegis defend --defense input_validator
 
-# 📊 Full attack × defense matrix
+# Full attack x defense matrix
 uv run aegis matrix
 
-# 📝 Generate an HTML report from results
+# Generate an HTML report from results
 uv run aegis report --format html
 ```
+
+### 📊 Dashboard
+
+A [Streamlit](https://streamlit.io/) dashboard is available at **http://localhost:8501** for interactive exploration of scan results, defense comparisons, and per-category breakdowns. See the [`dashboard/`](dashboard/) directory for details.
 
 ---
 
@@ -132,6 +153,30 @@ uv run aegis report --format html
 | `asi05_code_exec` | ASI05 | Prompt → remote code execution via code_exec MCP |
 | `asi06_memory_poison` | ASI06 | Cross-turn memory corruption, persistent backdoor injection |
 | `mcp06_cmd_injection` | MCP06 | OS command injection, SQL injection, path traversal via MCP tools |
+
+---
+
+## 📄 GRC-Ready Security Assessment Report
+
+AEGIS generates a professional HTML security assessment report designed for GRC (Governance, Risk & Compliance) workflows. Print to PDF or share directly with auditors and compliance teams.
+
+**Report highlights:**
+- **Executive summary** with overall risk rating and top recommendations
+- **Risk heatmap** showing attack success rates across all categories
+- **Defense effectiveness comparison** — before/after metrics with visual bar charts
+- **Detailed findings** with evidence, business impact, and remediation guidance
+- **Framework alignment** — maps findings to OWASP LLM Top 10, OWASP Agentic Top 10, MITRE ATLAS, and NIST AI RMF
+- **PDF-printable** — A4 page breaks, print-optimized CSS, ready for executive distribution
+
+```bash
+# Generate HTML report from scan results
+uv run aegis report --format html
+
+# Or generate directly during a scan
+uv run aegis scan --format html
+```
+
+> See a sample report: [`reports/AEGIS_Security_Assessment_Report.html`](reports/AEGIS_Security_Assessment_Report.html)
 
 ---
 
@@ -166,7 +211,7 @@ uv run aegis report --format html
 
 ## 🧪 Testing
 
-549 tests, 89% coverage, enforced at 80% minimum:
+584 tests, 89% coverage, enforced at 80% minimum:
 
 ```bash
 # Run tests with coverage
@@ -201,6 +246,13 @@ uv run python scripts/validate_reports.py --schema report --input reports/sample
 | [📐 METHODOLOGY.md](docs/METHODOLOGY.md) | Evaluation methodology, scoring, and framework alignment |
 | [🛡️ DEFENSE_EVALUATION.md](docs/DEFENSE_EVALUATION.md) | Per-defense bypass analysis, layering strategy, residual risk |
 | [📋 CHANGELOG.md](CHANGELOG.md) | v1.0 release notes |
+| [📄 Security Assessment Report](reports/AEGIS_Security_Assessment_Report.html) | GRC-ready security assessment (PDF-printable) |
+
+---
+
+## 🔄 CI/CD
+
+GitHub Actions workflow at [`.github/workflows/security-scan.yml`](.github/workflows/security-scan.yml) runs scheduled weekly scans and on every PR.
 
 ---
 
