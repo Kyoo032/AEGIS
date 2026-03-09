@@ -6,6 +6,7 @@ All tracks call load_config() to get the shared configuration.
 from __future__ import annotations
 
 import logging
+import os
 from pathlib import Path
 from typing import Any
 
@@ -137,8 +138,8 @@ _DEFAULTS: dict[str, Any] = {
     "evaluation": {
         "scorers": ["rule_based"],
         "judge_model": "qwen3:1.7b",
-        "judge_timeout_seconds": 30,
-        "judge_max_retries": 1,
+        "judge_timeout_seconds": 120,
+        "judge_max_retries": 3,
         "judge_num_predict": 64,
         "judge_keep_alive": "15m",
         "judge_hard_fail": True,
@@ -238,6 +239,16 @@ def load_config(config_path: str | Path | None = None) -> dict[str, Any]:
 
     _validate_config(raw, path)
     merged = _deep_merge(_DEFAULTS, raw)
+
+    # Environment variable overrides
+    provider_mode = os.environ.get("AEGIS_PROVIDER_MODE")
+    if provider_mode:
+        merged["testbed"]["provider"]["mode"] = provider_mode
+
+    ollama_url = os.environ.get("OLLAMA_BASE_URL")
+    if ollama_url:
+        merged["testbed"]["provider"]["ollama_base_url"] = ollama_url
+
     _validate_nested(merged, path)
 
     logger.info("AEGIS config loaded successfully from %s", path)

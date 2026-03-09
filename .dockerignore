@@ -1,0 +1,14 @@
+.git
+.venv
+__pycache__
+*.pyc
+.github
+.claude
+docs
+*.md
+!README.md
+.ruff_cache
+.pytest_cache
+.mypy_cache
+.coverage
+.deepeval

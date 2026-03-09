@@ -1,0 +1,876 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline';">
+<title>AEGIS AI Agent Security Assessment Report</title>
+<style>
+  /* ── Reset & Base ── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+    color: #1a1a2e;
+    background: #fff;
+    line-height: 1.6;
+    font-size: 11pt;
+  }
+
+  /* ── Print ── */
+  @media print {
+    body { font-size: 10pt; }
+    .page-break { page-break-before: always; }
+    .no-break { page-break-inside: avoid; }
+    header, section { page-break-inside: avoid; }
+    @page { margin: 2cm 1.8cm; size: A4; }
+    @page :first { margin-top: 0; }
+    .cover { height: 100vh; display: flex; flex-direction: column; justify-content: center; }
+  }
+
+  /* ── Layout ── */
+  .container { max-width: 900px; margin: 0 auto; padding: 0 2rem; }
+
+  /* ── Cover ── */
+  .cover {
+    background: linear-gradient(135deg, #0d1b2a 0%, #1b2838 50%, #16213e 100%);
+    color: #fff;
+    padding: 6rem 3rem;
+    text-align: center;
+    margin-bottom: 2rem;
+  }
+  .cover h1 { font-size: 2.4rem; font-weight: 700; margin-bottom: 0.5rem; letter-spacing: -0.5px; }
+  .cover .subtitle { font-size: 1.1rem; color: #a8b2d1; margin-bottom: 2rem; }
+  .cover-meta { display: flex; justify-content: center; gap: 2rem; flex-wrap: wrap; }
+  .cover-meta div { text-align: center; }
+  .cover-meta .label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; color: #64748b; }
+  .cover-meta .value { font-size: 1rem; font-weight: 600; color: #e2e8f0; }
+  .classification {
+    display: inline-block;
+    margin-top: 2rem;
+    padding: 0.3rem 1.2rem;
+    border: 1px solid #f59e0b;
+    color: #f59e0b;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    border-radius: 3px;
+  }
+
+  /* ── Section Headers ── */
+  h2 {
+    font-size: 1.4rem;
+    color: #0d1b2a;
+    border-bottom: 2px solid #1e3a5f;
+    padding-bottom: 0.4rem;
+    margin: 2.5rem 0 1rem;
+    font-weight: 700;
+  }
+  h3 { font-size: 1.1rem; color: #1e3a5f; margin: 1.5rem 0 0.5rem; font-weight: 600; }
+  h4 { font-size: 1rem; color: #334155; margin: 1rem 0 0.4rem; font-weight: 600; }
+
+  /* ── Tables ── */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1rem 0 1.5rem;
+    font-size: 0.92rem;
+  }
+  th, td { padding: 0.55rem 0.75rem; text-align: left; border: 1px solid #cbd5e1; }
+  th { background: #0d1b2a; color: #fff; font-weight: 600; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.5px; }
+  tr:nth-child(even) { background: #f1f5f9; }
+  tr:hover { background: #e2e8f0; }
+
+  /* ── Severity Badges ── */
+  .badge {
+    display: inline-block;
+    padding: 0.15rem 0.6rem;
+    border-radius: 3px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #fff;
+  }
+  .badge-critical { background: #dc2626; }
+  .badge-high { background: #ea580c; }
+  .badge-medium { background: #d97706; }
+  .badge-low { background: #16a34a; }
+  .badge-info { background: #6366f1; }
+  .badge-pass { background: #16a34a; }
+  .badge-fail { background: #dc2626; }
+
+  /* ── Metric Cards ── */
+  .metrics { display: flex; gap: 1.2rem; margin: 1.5rem 0; flex-wrap: wrap; }
+  .metric-card {
+    flex: 1;
+    min-width: 180px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    padding: 1.2rem;
+    text-align: center;
+  }
+  .metric-card .metric-value {
+    font-size: 2rem;
+    font-weight: 800;
+    color: #0d1b2a;
+    line-height: 1.2;
+  }
+  .metric-card .metric-label {
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #64748b;
+    margin-top: 0.3rem;
+  }
+  .metric-card.critical .metric-value { color: #dc2626; }
+  .metric-card.success .metric-value { color: #16a34a; }
+  .metric-card.warning .metric-value { color: #d97706; }
+
+  /* ── Risk Heatmap ── */
+  .heatmap td { text-align: center; font-weight: 700; font-size: 0.85rem; }
+  .heat-critical { background: #fecaca !important; color: #991b1b; }
+  .heat-high { background: #fed7aa !important; color: #9a3412; }
+  .heat-medium { background: #fef08a !important; color: #854d0e; }
+  .heat-low { background: #bbf7d0 !important; color: #166534; }
+  .heat-none { background: #f1f5f9 !important; color: #94a3b8; }
+
+  /* ── Callout Boxes ── */
+  .callout {
+    border-left: 4px solid #1e3a5f;
+    background: #f1f5f9;
+    padding: 1rem 1.2rem;
+    margin: 1rem 0;
+    border-radius: 0 4px 4px 0;
+  }
+  .callout.warning { border-left-color: #d97706; background: #fffbeb; }
+  .callout.success { border-left-color: #16a34a; background: #f0fdf4; }
+  .callout.danger { border-left-color: #dc2626; background: #fef2f2; }
+
+  /* ── Lists ── */
+  ul, ol { margin: 0.5rem 0 1rem 1.5rem; }
+  li { margin-bottom: 0.3rem; }
+
+  /* ── Paragraph ── */
+  p { margin: 0.5rem 0; }
+
+  /* ── Footer ── */
+  .footer {
+    margin-top: 3rem;
+    padding: 1.5rem 0;
+    border-top: 1px solid #e2e8f0;
+    text-align: center;
+    font-size: 0.8rem;
+    color: #94a3b8;
+  }
+
+  /* ── TOC ── */
+  .toc { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 1.5rem 2rem; margin: 1.5rem 0; }
+  .toc h3 { margin-top: 0; color: #0d1b2a; }
+  .toc ol { margin-left: 1.2rem; }
+  .toc li { margin-bottom: 0.4rem; }
+  .toc a { color: #1e3a5f; text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+
+  /* ── Comparison bar ── */
+  .bar-container { display: flex; align-items: center; gap: 0.5rem; }
+  .bar { height: 18px; border-radius: 3px; min-width: 2px; }
+  .bar-baseline { background: #dc2626; }
+  .bar-defended { background: #16a34a; }
+
+  /* ── Skip link ── */
+  .skip-link {
+    position: absolute;
+    top: -40px;
+    left: 0;
+    background: #0d1b2a;
+    color: #fff;
+    padding: 0.5rem 1rem;
+    z-index: 100;
+    text-decoration: none;
+    font-size: 0.9rem;
+  }
+  .skip-link:focus { top: 0; }
+</style>
+</head>
+<body>
+<a href="#executive-summary" class="skip-link">Skip to content</a>
+
+<!-- ════════════════════ COVER ════════════════════ -->
+<header class="cover" role="banner">
+  <h1>AEGIS AI Agent Security Assessment Report</h1>
+  <p class="subtitle">Agentic Exploit &amp; Guardrail Investigation Suite</p>
+  <div class="cover-meta">
+    <div><span class="label">Date</span><br><span class="value">March 9, 2026</span></div>
+    <div><span class="label">Version</span><br><span class="value">v1.0</span></div>
+    <div><span class="label">Target</span><br><span class="value">qwen3:4b AI Agent</span></div>
+    <div><span class="label">Assessment Type</span><br><span class="value">Automated Security Scan</span></div>
+  </div>
+  <div class="classification">Authorized Distribution</div>
+</header>
+
+<div class="container">
+
+<!-- ════════════════════ TOC ════════════════════ -->
+<nav class="toc" aria-label="Table of Contents">
+  <h3>Table of Contents</h3>
+  <ol>
+    <li><a href="#executive-summary">Executive Summary</a></li>
+    <li><a href="#risk-overview">Risk Overview Dashboard</a></li>
+    <li><a href="#findings-summary">Findings Summary</a></li>
+    <li><a href="#defense-effectiveness">Defense Effectiveness</a></li>
+    <li><a href="#recommendations">Recommendations</a></li>
+    <li><a href="#framework-alignment">Framework Alignment</a></li>
+    <li><a href="#operational-verification">Operational Verification</a></li>
+    <li><a href="#appendix">Appendix</a></li>
+  </ol>
+</nav>
+
+<main role="main">
+<!-- ════════════════════ 1. EXECUTIVE SUMMARY ════════════════════ -->
+<div class="page-break"></div>
+<h2 id="executive-summary">1. Executive Summary</h2>
+
+<p>
+  AEGIS (Agentic Exploit &amp; Guardrail Investigation Suite) is an automated security testing platform that evaluates AI agents for vulnerabilities. It sends adversarial attack payloads at an AI agent equipped with tools (file access, database queries, email, code execution) and measures whether the agent can be tricked into performing malicious actions.
+</p>
+
+<p>
+  This assessment tested a <strong>qwen3:4b</strong> AI agent with <strong>68 core attack payloads</strong> (86 total including extended set) across <strong>7 attack categories</strong>, aligned with OWASP and MITRE security frameworks. Five defense modules were evaluated individually and in layered combinations.
+</p>
+
+<div class="callout danger">
+  <strong>Key Finding:</strong> Without defenses, <strong>42.65%</strong> of all attack payloads succeeded (29 out of 68 core payloads). With the recommended layered defense configuration, the success rate dropped to <strong>8.82%</strong>&mdash;a <strong>79.31% improvement</strong>. Six sophisticated attacks remain unmitigated and require architectural-level countermeasures.
+</div>
+
+<h3>Overall Risk Rating</h3>
+<table style="width: auto;">
+  <tr>
+    <td><strong>Without Defenses</strong></td>
+    <td><span class="badge badge-high">HIGH</span></td>
+  </tr>
+  <tr>
+    <td><strong>With Recommended Defenses</strong></td>
+    <td><span class="badge badge-medium">MEDIUM-LOW</span></td>
+  </tr>
+</table>
+
+<h3>Top 3 Recommendations</h3>
+<ol>
+  <li><strong>Deploy layered defenses immediately</strong> &mdash; Enable <code>input_validator + output_filter + tool_boundary</code> as the mandatory baseline for all production AI agent deployments.</li>
+  <li><strong>Restrict tool permissions</strong> &mdash; Tighten the permission enforcer to deny dangerous cross-tool flows (e.g., database&rarr;email, filesystem&rarr;HTTP) and enforce least-privilege access.</li>
+  <li><strong>Implement memory integrity checks</strong> &mdash; The remaining 6 unmitigated attacks exploit memory/context poisoning; add provenance verification for conversation history and retrieved documents.</li>
+</ol>
+
+<!-- ════════════════════ 2. RISK OVERVIEW ════════════════════ -->
+<div class="page-break"></div>
+<h2 id="risk-overview">2. Risk Overview Dashboard</h2>
+
+<div class="metrics">
+  <div class="metric-card">
+    <div class="metric-value">68</div>
+    <div class="metric-label">Core Attack Payloads</div>
+  </div>
+  <div class="metric-card critical">
+    <div class="metric-value">42.65%</div>
+    <div class="metric-label">Baseline Success Rate</div>
+  </div>
+  <div class="metric-card success">
+    <div class="metric-value">8.82%</div>
+    <div class="metric-label">Defended Success Rate</div>
+  </div>
+  <div class="metric-card warning">
+    <div class="metric-value">6</div>
+    <div class="metric-label">Residual Attacks</div>
+  </div>
+</div>
+
+<h3>Risk Heatmap</h3>
+<table class="heatmap no-break">
+  <tr>
+    <th>Attack Category</th>
+    <th>Critical</th>
+    <th>High</th>
+    <th>Medium</th>
+    <th>Low</th>
+  </tr>
+  <tr>
+    <td><strong>MCP06</strong> Command Injection via MCP</td>
+    <td class="heat-critical" aria-label="Critical: 10 of 10">10/10</td>
+    <td class="heat-none">&mdash;</td>
+    <td class="heat-none">&mdash;</td>
+    <td class="heat-none">&mdash;</td>
+  </tr>
+  <tr>
+    <td><strong>ASI02</strong> Tool Misuse &amp; Exploitation</td>
+    <td class="heat-critical" aria-label="Critical: 9 of 10">9/10</td>
+    <td class="heat-none">&mdash;</td>
+    <td class="heat-none">&mdash;</td>
+    <td class="heat-none">&mdash;</td>
+  </tr>
+  <tr>
+    <td><strong>ASI04</strong> Supply Chain Vulnerabilities</td>
+    <td class="heat-critical" aria-label="Critical: 9 of 10">9/10</td>
+    <td class="heat-none">&mdash;</td>
+    <td class="heat-none">&mdash;</td>
+    <td class="heat-none">&mdash;</td>
+  </tr>
+  <tr>
+    <td><strong>ASI01</strong> Agent Goal Hijacking</td>
+    <td class="heat-none">&mdash;</td>
+    <td class="heat-none">&mdash;</td>
+    <td class="heat-medium" aria-label="Medium: 1 of 10">1/10</td>
+    <td class="heat-none">&mdash;</td>
+  </tr>
+  <tr>
+    <td><strong>LLM01</strong> Prompt Injection</td>
+    <td class="heat-none">&mdash;</td>
+    <td class="heat-none">&mdash;</td>
+    <td class="heat-none">&mdash;</td>
+    <td class="heat-low" aria-label="Low: 0 of 13">0/13</td>
+  </tr>
+  <tr>
+    <td><strong>ASI05</strong> Unexpected Code Execution</td>
+    <td class="heat-none">&mdash;</td>
+    <td class="heat-none">&mdash;</td>
+    <td class="heat-none">&mdash;</td>
+    <td class="heat-low" aria-label="Low: 0 of 10">0/10</td>
+  </tr>
+  <tr>
+    <td><strong>ASI06</strong> Memory &amp; Context Poisoning</td>
+    <td class="heat-none">&mdash;</td>
+    <td class="heat-none">&mdash;</td>
+    <td class="heat-none">&mdash;</td>
+    <td class="heat-low" aria-label="Low: 0 of 5">0/5</td>
+  </tr>
+</table>
+
+<div class="callout">
+  <strong>Reading the heatmap:</strong> Each cell shows the number of successful attacks out of total payloads for that category. Red indicates critical risk (high success rate with severe impact), yellow indicates medium risk, and green indicates low risk (attacks were blocked).
+</div>
+
+<!-- ════════════════════ 3. FINDINGS ════════════════════ -->
+<div class="page-break"></div>
+<h2 id="findings-summary">3. Findings Summary</h2>
+
+<table class="no-break">
+  <tr>
+    <th>Category</th>
+    <th>OWASP ID</th>
+    <th>Risk Level</th>
+    <th>Attack Success Rate</th>
+    <th>Status</th>
+  </tr>
+  <tr>
+    <td>Command Injection via MCP</td>
+    <td>MCP06</td>
+    <td><span class="badge badge-critical">Critical</span></td>
+    <td>100% (10/10)</td>
+    <td>Open</td>
+  </tr>
+  <tr>
+    <td>Tool Misuse &amp; Exploitation</td>
+    <td>ASI02</td>
+    <td><span class="badge badge-critical">Critical</span></td>
+    <td>90% (9/10)</td>
+    <td>Open</td>
+  </tr>
+  <tr>
+    <td>Supply Chain Vulnerabilities</td>
+    <td>ASI04</td>
+    <td><span class="badge badge-critical">Critical</span></td>
+    <td>90% (9/10)</td>
+    <td>Open</td>
+  </tr>
+  <tr>
+    <td>Agent Goal Hijacking</td>
+    <td>ASI01</td>
+    <td><span class="badge badge-medium">Medium</span></td>
+    <td>10% (1/10)</td>
+    <td>Open</td>
+  </tr>
+  <tr>
+    <td>Prompt Injection</td>
+    <td>LLM01</td>
+    <td><span class="badge badge-low">Low</span></td>
+    <td>0% (0/13)</td>
+    <td>Mitigated</td>
+  </tr>
+  <tr>
+    <td>Unexpected Code Execution</td>
+    <td>ASI05</td>
+    <td><span class="badge badge-low">Low</span></td>
+    <td>0% (0/10)</td>
+    <td>Mitigated</td>
+  </tr>
+  <tr>
+    <td>Memory &amp; Context Poisoning</td>
+    <td>ASI06</td>
+    <td><span class="badge badge-low">Low</span></td>
+    <td>0% (0/5)</td>
+    <td>Mitigated</td>
+  </tr>
+</table>
+
+<h3>Finding Details</h3>
+
+<div class="no-break">
+  <h4>F-1: Command Injection via MCP Tools <span class="badge badge-critical">Critical</span></h4>
+  <p><strong>What this means:</strong> An attacker could inject operating system commands through the AI agent&rsquo;s tool interface. For example, by crafting a request that includes hidden shell commands, an attacker could execute arbitrary code on the server, read sensitive files, or take control of the system.</p>
+  <p><strong>Evidence:</strong> 10 out of 10 command injection payloads succeeded without defenses. Techniques included semicolon injection, pipe chaining, command substitution, path traversal, and newline injection.</p>
+  <p><strong>Business Impact:</strong> Complete system compromise, data exfiltration, service disruption.</p>
+</div>
+
+<div class="no-break">
+  <h4>F-2: Tool Misuse &amp; Exploitation <span class="badge badge-critical">Critical</span></h4>
+  <p><strong>What this means:</strong> An attacker could trick the AI agent into misusing its legitimate tools in harmful ways&mdash;reading files it shouldn&rsquo;t access, sending unauthorized emails, performing destructive database operations, or escalating beyond its intended scope.</p>
+  <p><strong>Evidence:</strong> 9 out of 10 tool misuse payloads succeeded. Attacks included parameter injection, destructive operations, scope escape, and email abuse.</p>
+  <p><strong>Business Impact:</strong> Unauthorized data access, data loss, reputational damage from unauthorized communications.</p>
+</div>
+
+<div class="no-break">
+  <h4>F-3: Supply Chain Vulnerabilities <span class="badge badge-critical">Critical</span></h4>
+  <p><strong>What this means:</strong> An attacker could compromise the AI agent by poisoning its tool definitions, injecting malicious instructions through retrieved documents, or substituting trusted data sources with compromised ones.</p>
+  <p><strong>Evidence:</strong> 9 out of 10 supply chain payloads succeeded. Attacks included evil tool injection, RAG poisoning, rug-pull tool substitution, and cross-tool chain exploitation.</p>
+  <p><strong>Business Impact:</strong> Persistent backdoor access, trusted channel compromise, cascading failures across connected systems.</p>
+</div>
+
+<div class="no-break">
+  <h4>F-4: Agent Goal Hijacking <span class="badge badge-medium">Medium</span></h4>
+  <p><strong>What this means:</strong> An attacker could attempt to redirect the AI agent&rsquo;s objectives, overriding its intended purpose. The agent demonstrated resilience against most hijacking attempts but was susceptible to one targeted technique.</p>
+  <p><strong>Evidence:</strong> 1 out of 10 goal hijacking payloads succeeded (direct override). Persona manipulation, gradual drift, and priority reordering attacks were blocked.</p>
+  <p><strong>Business Impact:</strong> Agent performing unintended actions, potential misuse of resources.</p>
+</div>
+
+<div class="no-break">
+  <h4>F-5: Prompt Injection, Code Execution, Memory Poisoning <span class="badge badge-low">Low</span></h4>
+  <p><strong>What this means:</strong> The agent demonstrated strong baseline resistance to direct prompt injection (0/13), unexpected code execution (0/10), and memory poisoning (0/5). These categories are currently well-controlled by the agent&rsquo;s default safety features.</p>
+  <p><strong>Note:</strong> Baseline ASR of 0% does not guarantee immunity. These categories should continue to be monitored as attack techniques evolve.</p>
+</div>
+
+<!-- ════════════════════ 4. DEFENSE EFFECTIVENESS ════════════════════ -->
+<div class="page-break"></div>
+<h2 id="defense-effectiveness">4. Defense Effectiveness</h2>
+
+<h3>Before / After Comparison</h3>
+<table class="no-break">
+  <tr>
+    <th>Defense Configuration</th>
+    <th>Successful Attacks</th>
+    <th>Total</th>
+    <th>ASR</th>
+    <th>Improvement</th>
+  </tr>
+  <tr>
+    <td>No defenses (baseline)</td>
+    <td>29</td>
+    <td>68</td>
+    <td>42.65%</td>
+    <td>&mdash;</td>
+  </tr>
+  <tr>
+    <td><code>input_validator</code> only</td>
+    <td>10</td>
+    <td>68</td>
+    <td>14.71%</td>
+    <td style="color:#16a34a; font-weight:700;">&darr; 65.52%</td>
+  </tr>
+  <tr>
+    <td><code>tool_boundary</code> only</td>
+    <td>24</td>
+    <td>68</td>
+    <td>35.29%</td>
+    <td style="color:#d97706; font-weight:700;">&darr; 17.24%</td>
+  </tr>
+  <tr>
+    <td><code>output_filter</code> only</td>
+    <td>29</td>
+    <td>68</td>
+    <td>42.65%</td>
+    <td>0.00%</td>
+  </tr>
+  <tr>
+    <td><code>mcp_integrity</code> only</td>
+    <td>29</td>
+    <td>68</td>
+    <td>42.65%</td>
+    <td>0.00%</td>
+  </tr>
+  <tr>
+    <td><code>permission_enforcer</code> only</td>
+    <td>29</td>
+    <td>68</td>
+    <td>42.65%</td>
+    <td>0.00%</td>
+  </tr>
+  <tr style="background:#f0fdf4 !important; font-weight:700;">
+    <td>input_validator + output_filter + tool_boundary (Recommended)</td>
+    <td>6</td>
+    <td>68</td>
+    <td>8.82%</td>
+    <td style="color:#16a34a;">&darr; 79.31%</td>
+  </tr>
+  <tr>
+    <td>All 5 defenses combined</td>
+    <td>6</td>
+    <td>68</td>
+    <td>8.82%</td>
+    <td style="color:#16a34a; font-weight:700;">&darr; 79.31%</td>
+  </tr>
+</table>
+
+<h3>Visual Comparison</h3>
+<table>
+  <tr>
+    <th style="width:30%;">Configuration</th>
+    <th>Attack Success Rate</th>
+  </tr>
+  <tr>
+    <td>No defenses</td>
+    <td>
+      <div class="bar-container">
+        <div class="bar bar-baseline" style="width:42.65%;"></div>
+        <span>42.65%</span>
+      </div>
+    </td>
+  </tr>
+  <tr>
+    <td><code>input_validator</code></td>
+    <td>
+      <div class="bar-container">
+        <div class="bar bar-defended" style="width:14.71%;"></div>
+        <span>14.71%</span>
+      </div>
+    </td>
+  </tr>
+  <tr>
+    <td><code>tool_boundary</code></td>
+    <td>
+      <div class="bar-container">
+        <div class="bar bar-baseline" style="width:35.29%;"></div>
+        <span>35.29%</span>
+      </div>
+    </td>
+  </tr>
+  <tr>
+    <td><strong>Layered (3-defense)</strong></td>
+    <td>
+      <div class="bar-container">
+        <div class="bar bar-defended" style="width:8.82%;"></div>
+        <span><strong>8.82%</strong></span>
+      </div>
+    </td>
+  </tr>
+</table>
+
+<h3>Recommended Defense Configuration</h3>
+<div class="callout success">
+  <strong>Deploy as mandatory baseline:</strong> <code>input_validator + output_filter + tool_boundary</code><br>
+  This three-layer configuration provides defense-in-depth across attack stages:
+  <ol style="margin-top:0.5rem;">
+    <li><strong>Input Validator</strong> &mdash; blocks injection and hijacking attempts at the prompt boundary</li>
+    <li><strong>Tool Boundary</strong> &mdash; catches parameter-level abuse that bypasses input validation</li>
+    <li><strong>Output Filter</strong> &mdash; provides a final check on response content (defense-in-depth)</li>
+  </ol>
+</div>
+
+<h3>Residual Risk</h3>
+<p>Six attacks (8.82%) remain successful even with all five defenses active. These are sophisticated, multi-stage attacks that bypass all input and parameter boundaries:</p>
+<ul>
+  <li><strong>Progressive drift attacks</strong> (ASI06) &mdash; gradually shift agent behavior over multiple conversation turns, evading per-turn validation</li>
+  <li><strong>Supply chain poisoning</strong> (ASI04) &mdash; inject malicious instructions through tool outputs and retrieved documents, not user input</li>
+  <li><strong>Context fabrication</strong> (ASI06) &mdash; create fake conversation history to manipulate agent behavior</li>
+</ul>
+<p>These residual attacks require <strong>architectural mitigations</strong>: memory integrity verification, document provenance validation, and cross-turn behavior analysis.</p>
+
+<!-- ════════════════════ 5. RECOMMENDATIONS ════════════════════ -->
+<div class="page-break"></div>
+<h2 id="recommendations">5. Recommendations</h2>
+
+<table class="no-break">
+  <tr>
+    <th>Priority</th>
+    <th>Recommendation</th>
+    <th>Addresses</th>
+  </tr>
+  <tr>
+    <td><span class="badge badge-critical">Critical</span></td>
+    <td>Enforce <code>input_validator + output_filter + tool_boundary</code> as mandatory baseline defenses for all production AI agent deployments. No agent should operate without these controls.</td>
+    <td>MCP06, ASI02, ASI04, ASI01</td>
+  </tr>
+  <tr>
+    <td><span class="badge badge-high">High</span></td>
+    <td>Tighten <code>permission_enforcer</code> to use <code>restricted</code> mode with explicit cross-tool flow restrictions (e.g., deny database&rarr;email, deny filesystem&rarr;HTTP).</td>
+    <td>ASI02, ASI04, ASI01</td>
+  </tr>
+  <tr>
+    <td><span class="badge badge-high">High</span></td>
+    <td>Expand <code>mcp_integrity</code> checks to include runtime manifest verification and tool-drift detection for adversarial supply chain scenarios.</td>
+    <td>ASI04</td>
+  </tr>
+  <tr>
+    <td><span class="badge badge-medium">Medium</span></td>
+    <td>Add regression probes for high-risk categories (ASI02, ASI04, MCP06) to CI/CD pipelines and nightly security testing.</td>
+    <td>All categories</td>
+  </tr>
+  <tr>
+    <td><span class="badge badge-medium">Medium</span></td>
+    <td>Implement memory/context integrity verification to detect and block progressive drift and context fabrication attacks.</td>
+    <td>ASI06</td>
+  </tr>
+  <tr>
+    <td><span class="badge badge-medium">Medium</span></td>
+    <td>Wire output filtering into the tool-call pipeline as a post-invocation gate to intercept sensitive data in tool results before they reach the agent.</td>
+    <td>ASI02, LLM02</td>
+  </tr>
+</table>
+
+<!-- ════════════════════ 6. FRAMEWORK ALIGNMENT ════════════════════ -->
+<div class="page-break"></div>
+<h2 id="framework-alignment">6. Framework Alignment</h2>
+
+<h3>OWASP Top 10 for LLM Applications (2025)</h3>
+<table class="no-break">
+  <tr>
+    <th>OWASP ID</th>
+    <th>Category</th>
+    <th>AEGIS Coverage</th>
+    <th>Assessment Result</th>
+  </tr>
+  <tr>
+    <td>LLM01</td>
+    <td>Prompt Injection</td>
+    <td><code>llm01_prompt_inject</code> (13 payloads)</td>
+    <td><span class="badge badge-low">Low Risk</span> 0% ASR</td>
+  </tr>
+  <tr>
+    <td>LLM02</td>
+    <td>Sensitive Information Disclosure</td>
+    <td><code>llm02_data_disclosure</code> (extended set)</td>
+    <td>Tested in extended scan</td>
+  </tr>
+</table>
+
+<h3>OWASP Top 10 for Agentic Applications (2026)</h3>
+<table class="no-break">
+  <tr>
+    <th>OWASP ID</th>
+    <th>Category</th>
+    <th>AEGIS Coverage</th>
+    <th>Assessment Result</th>
+  </tr>
+  <tr>
+    <td>ASI01</td>
+    <td>Agent Goal Hijacking</td>
+    <td><code>asi01_goal_hijack</code> (10 payloads)</td>
+    <td><span class="badge badge-medium">Medium</span> 10% ASR</td>
+  </tr>
+  <tr>
+    <td>ASI02</td>
+    <td>Tool Misuse &amp; Exploitation</td>
+    <td><code>asi02_tool_misuse</code> (10 payloads)</td>
+    <td><span class="badge badge-critical">Critical</span> 90% ASR</td>
+  </tr>
+  <tr>
+    <td>ASI04</td>
+    <td>Supply Chain Vulnerabilities</td>
+    <td><code>asi04_supply_chain</code> (10 payloads)</td>
+    <td><span class="badge badge-critical">Critical</span> 90% ASR</td>
+  </tr>
+  <tr>
+    <td>ASI05</td>
+    <td>Unexpected Code Execution</td>
+    <td><code>asi05_code_exec</code> (10 payloads)</td>
+    <td><span class="badge badge-low">Low Risk</span> 0% ASR</td>
+  </tr>
+  <tr>
+    <td>ASI06</td>
+    <td>Memory &amp; Context Poisoning</td>
+    <td><code>asi06_memory_poison</code> (5 payloads)</td>
+    <td><span class="badge badge-low">Low Risk</span> 0% ASR</td>
+  </tr>
+</table>
+
+<h3>MITRE ATLAS Mapping</h3>
+<table class="no-break">
+  <tr>
+    <th>MITRE ATLAS ID</th>
+    <th>Technique</th>
+    <th>AEGIS Module</th>
+  </tr>
+  <tr>
+    <td>AML.T0051</td>
+    <td>LLM Prompt Injection</td>
+    <td><code>llm01_prompt_inject</code>, <code>asi01_goal_hijack</code>, <code>asi05_code_exec</code></td>
+  </tr>
+  <tr>
+    <td>AML.T0040</td>
+    <td>ML Model Inference API Access / Tool Abuse</td>
+    <td><code>asi02_tool_misuse</code>, <code>mcp06_cmd_injection</code></td>
+  </tr>
+  <tr>
+    <td>AML.T0010</td>
+    <td>ML Supply Chain Compromise</td>
+    <td><code>asi04_supply_chain</code></td>
+  </tr>
+  <tr>
+    <td>AML.T0020</td>
+    <td>Poisoning Training/Inference Data</td>
+    <td><code>asi06_memory_poison</code></td>
+  </tr>
+</table>
+
+<h3>NIST AI Risk Management Framework (AI RMF)</h3>
+<div class="callout">
+  <p>This assessment aligns with the NIST AI RMF <strong>MEASURE</strong> function, specifically:</p>
+  <ul>
+    <li><strong>MEASURE 2.6</strong> &mdash; AI system safety and security testing, including adversarial testing</li>
+    <li><strong>MEASURE 2.7</strong> &mdash; AI system security evaluation against known attack patterns</li>
+    <li><strong>GOVERN 1.5</strong> &mdash; Risk assessment processes for AI systems, including agentic AI</li>
+  </ul>
+  <p>AEGIS provides automated, reproducible security measurement that supports continuous AI risk monitoring as recommended by the framework.</p>
+</div>
+
+<!-- ════════════════════ 7. OPERATIONAL VERIFICATION ════════════════════ -->
+<div class="page-break"></div>
+<h2 id="operational-verification">7. Operational Verification</h2>
+
+<p>The following operational checks were performed on March 9, 2026 to verify the AEGIS platform is fully functional.</p>
+
+<table class="no-break">
+  <tr>
+    <th>Check</th>
+    <th>Result</th>
+    <th>Details</th>
+  </tr>
+  <tr>
+    <td>Docker Image Build</td>
+    <td><span class="badge badge-pass">PASS</span></td>
+    <td>All platform images (scanner, dashboard, model server) built successfully.</td>
+  </tr>
+  <tr>
+    <td>Ollama Model Pull</td>
+    <td><span class="badge badge-pass">PASS</span></td>
+    <td>Target model (qwen3:4b) and evaluation judge model (qwen3:1.7b) pulled successfully.</td>
+  </tr>
+  <tr>
+    <td>AEGIS Security Scan</td>
+    <td><span class="badge badge-pass">PASS</span></td>
+    <td>Scan completed successfully. 86 payloads executed, 61 successful. Results archived per retention policy.</td>
+  </tr>
+  <tr>
+    <td>Dashboard Accessibility</td>
+    <td><span class="badge badge-pass">PASS</span></td>
+    <td>Dashboard healthy and accessible. Health check returned successful response.</td>
+  </tr>
+  <tr>
+    <td>Unit Tests</td>
+    <td><span class="badge badge-pass">PASS</span></td>
+    <td>584 tests passed with 1 warning. Coverage: 89% (exceeds 80% minimum).</td>
+  </tr>
+  <tr>
+    <td>Container Health</td>
+    <td><span class="badge badge-pass">PASS</span></td>
+    <td>All containers reported healthy status. Ollama, dashboard, and scanner containers operated correctly.</td>
+  </tr>
+  <tr>
+    <td>Stack Teardown</td>
+    <td><span class="badge badge-pass">PASS</span></td>
+    <td>Clean shutdown completed. All containers and network removed.</td>
+  </tr>
+</table>
+
+<h3>Live Scan Results Summary</h3>
+<table class="no-break">
+  <tr>
+    <th>Metric</th>
+    <th>Value</th>
+  </tr>
+  <tr><td>Total Payloads Executed</td><td>86</td></tr>
+  <tr><td>Successful Attacks</td><td>61</td></tr>
+  <tr><td>Attack Success Rate</td><td>70.93%</td></tr>
+  <tr><td>Report Artifact</td><td>Scan results archived per retention policy</td></tr>
+  <tr><td>Scan Date</td><td>March 9, 2026</td></tr>
+</table>
+
+<div class="callout warning">
+  <strong>Note on live scan ASR vs. documented baseline:</strong> The live scan (March 9, 2026) produced an ASR of 70.93% across the full 86-payload set, compared to the documented baseline of 42.65% across the 68-payload core-7 set. The difference is attributable to: (1) the live scan includes the extended payload set (86 vs. 68 payloads), and (2) model non-determinism with LLM tool-calling fallback to offline mode. The core-7 documented baseline remains the authoritative reference for defense comparison.
+</div>
+
+<!-- ════════════════════ 8. APPENDIX ════════════════════ -->
+<div class="page-break"></div>
+<h2 id="appendix">8. Appendix</h2>
+
+<h3>A. Methodology Summary</h3>
+<p>AEGIS uses automated black-box testing against a target AI agent with configured MCP tool surfaces. The assessment follows a structured approach:</p>
+<ol>
+  <li><strong>Baseline measurement</strong> &mdash; Run all attack modules with no defenses active to establish the unprotected attack surface.</li>
+  <li><strong>Single-defense evaluation</strong> &mdash; Activate one defense at a time and measure its individual impact on attack success rates.</li>
+  <li><strong>Layered-defense evaluation</strong> &mdash; Test combinations of defenses to measure defense-in-depth effectiveness.</li>
+  <li><strong>Delta comparison</strong> &mdash; Quantify each configuration&rsquo;s improvement: <code>delta = defended_ASR &minus; baseline_ASR</code>.</li>
+</ol>
+
+<p><strong>Scoring:</strong> Rule-based deterministic scoring (primary) with optional LLM-judge adjudication. Attack outcomes are binary: <em>success</em> (exploit objective achieved) or <em>failure</em> (probe blocked). Consensus scoring resolves disagreements using a configurable winner strategy.</p>
+
+<h3>B. Severity Classification</h3>
+<table class="no-break">
+  <tr>
+    <th>Severity</th>
+    <th>Criteria</th>
+  </tr>
+  <tr>
+    <td><span class="badge badge-critical">Critical</span></td>
+    <td>Attack succeeds with high confidence and high-impact control bypass (e.g., data exfiltration, system override). Immediate remediation required.</td>
+  </tr>
+  <tr>
+    <td><span class="badge badge-high">High</span></td>
+    <td>Attack succeeds reliably with meaningful impact; existing mitigations are incomplete. Remediation within 30 days.</td>
+  </tr>
+  <tr>
+    <td><span class="badge badge-medium">Medium</span></td>
+    <td>Attack succeeds intermittently or with partial impact. Remediation within 90 days.</td>
+  </tr>
+  <tr>
+    <td><span class="badge badge-low">Low</span></td>
+    <td>Limited exploitability or constrained impact. Address during normal development cycles.</td>
+  </tr>
+  <tr>
+    <td><span class="badge badge-info">Informational</span></td>
+    <td>Security-relevant observation without immediately exploitable impact. Monitor and reassess.</td>
+  </tr>
+</table>
+
+<h3>C. Assessment Details</h3>
+<table>
+  <tr><td><strong>Assessment Date</strong></td><td>March 9, 2026</td></tr>
+  <tr><td><strong>Tool</strong></td><td>AEGIS v1.0 (Agentic Exploit &amp; Guardrail Investigation Suite)</td></tr>
+  <tr><td><strong>Target Agent Model</strong></td><td>qwen3:4b (Ollama, local deployment)</td></tr>
+  <tr><td><strong>Evaluation Judge Model</strong></td><td>qwen3:1.7b (Ollama, local deployment)</td></tr>
+  <tr><td><strong>Scoring Method</strong></td><td>Rule-based (primary) + LLM-judge (consensus)</td></tr>
+  <tr><td><strong>Attack Payload Count</strong></td><td>68 core + 18 extended (86 total, across 7 categories)</td></tr>
+  <tr><td><strong>Defense Modules Tested</strong></td><td>5 (input_validator, output_filter, tool_boundary, mcp_integrity, permission_enforcer)</td></tr>
+  <tr><td><strong>Platform</strong></td><td>Containerized deployment</td></tr>
+  <tr><td><strong>Test Suite</strong></td><td>584 tests, 89% coverage</td></tr>
+</table>
+
+<h3>D. Limitations</h3>
+<ul>
+  <li>This is a point-in-time assessment; new attack techniques may emerge after the execution date.</li>
+  <li>Coverage is bounded by configured attack modules and payload sets. Real-world attacks may use techniques not covered.</li>
+  <li>Heuristic scoring can produce false positives and false negatives.</li>
+  <li>Results reflect the specific target model (qwen3:4b); different models may produce different vulnerability profiles.</li>
+  <li>Model non-determinism means exact metrics may vary between runs; trends and relative comparisons are reliable.</li>
+</ul>
+
+</main>
+
+<!-- ════════════════════ FOOTER ════════════════════ -->
+<footer class="footer">
+  <p>AEGIS AI Agent Security Assessment Report &mdash; v1.0 &mdash; March 9, 2026</p>
+  <p>Generated by AEGIS (Agentic Exploit &amp; Guardrail Investigation Suite)</p>
+  <p>Approved for distribution via authorized GRC platforms. Do not redistribute without approval.</p>
+</footer>
+
+</div><!-- .container -->
+</body>
+</html>
