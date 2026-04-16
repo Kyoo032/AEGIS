@@ -19,6 +19,7 @@ from aegis.models import (
     SecurityReport,
     Severity,
     ToolCall,
+    TraceRecord,
 )
 
 # ---------------------------------------------------------------------------
@@ -243,6 +244,58 @@ class TestAttackResult:
         data = {k: v for k, v in sample_attack_result.items() if k != "run_id"}
         with pytest.raises(ValidationError):
             AttackResult(**data)
+
+
+# ---------------------------------------------------------------------------
+# TraceRecord
+# ---------------------------------------------------------------------------
+
+
+class TestTraceRecord:
+    def test_instantiate_required_only(self):
+        trace = TraceRecord(
+            campaign_id="campaign-001",
+            turn_id="turn-001",
+            turn_index=0,
+            timestamp=datetime(2026, 1, 1, 12, 0, 0, tzinfo=UTC),
+        )
+
+        assert trace.campaign_id == "campaign-001"
+        assert trace.turn_id == "turn-001"
+        assert trace.turn_index == 0
+        assert trace.target_fingerprint is None
+        assert trace.tool_calls is None
+
+    def test_optional_evidence_fields_round_trip_json(self):
+        trace = TraceRecord(
+            campaign_id="campaign-001",
+            turn_id="turn-002",
+            turn_index=1,
+            timestamp=datetime(2026, 1, 1, 12, 0, 0, tzinfo=UTC),
+            target_fingerprint="agent:test",
+            context_source="fixture",
+            delegated_identity={"role": "peer-agent"},
+            peer_message_meta={"sender": "peer-a"},
+            approval_summary="Looks safe",
+            actual_action="delete_records",
+            tool_calls=[{"tool_name": "delete", "parameters": {"id": "all"}}],
+            scorer_rationale="rule matched",
+            prompts=[{"role": "user", "content": "run the action"}],
+            responses=[{"role": "assistant", "content": "done"}],
+            context={"fixture": "hitl"},
+            fixture_state={"step": 2},
+            defense_decisions=[{"defense": "input_validator", "decision": "allow"}],
+        )
+
+        parsed = TraceRecord.model_validate_json(trace.model_dump_json())
+
+        assert parsed.actual_action == "delete_records"
+        assert parsed.tool_calls == [{"tool_name": "delete", "parameters": {"id": "all"}}]
+        assert parsed.fixture_state == {"step": 2}
+
+    def test_missing_required_fields_raise(self):
+        with pytest.raises(ValidationError):
+            TraceRecord(turn_id="turn-001", turn_index=0)
 
 
 # ---------------------------------------------------------------------------

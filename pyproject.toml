@@ -28,6 +28,7 @@ dev = [
     "pytest==9.0.2",
     "pytest-cov==7.0.0",
     "jsonschema==4.26.0",
+    "pyright>=1.1.408",
     "ruff==0.15.1",
 ]
 redteam = [
@@ -63,6 +64,23 @@ ignore = ["E501"]
 [tool.ruff.lint.isort]
 known-first-party = ["aegis"]
 
+[tool.pyright]
+include = ["aegis", "dashboard"]
+exclude = [
+    "**/__pycache__",
+    ".venv",
+    ".venv.broken-20260307",
+    ".codex",
+    "output",
+    "reports",
+    "tmp",
+]
+pythonVersion = "3.11"
+pythonPlatform = "Linux"
+typeCheckingMode = "basic"
+extraPaths = ["."]
+reportMissingTypeStubs = "none"
+
 [tool.coverage.run]
 source = ["aegis"]
 omit = [
@@ -80,6 +98,7 @@ fail_under = 80
 dev = [
     "coverage==7.13.4",
     "jsonschema==4.26.0",
+    "pyright>=1.1.408",
     "pytest-cov==7.0.0",
     "ruff==0.15.1",
 ]

@@ -4,10 +4,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from aegis.reporting.report_generator import ReportGenerator
 from scripts.validate_reports import validate_files
 from tests.test_reporting.test_report_generator import _make_eval_result
-
-from aegis.reporting.report_generator import ReportGenerator
 
 
 def _write_json(path: Path, payload: dict) -> Path:

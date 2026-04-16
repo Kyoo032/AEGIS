@@ -18,6 +18,7 @@ from aegis.config import load_config
 from aegis.evaluation.pipeline import EvaluationPipeline
 from aegis.evaluation.protocol_adapter import ProtocolScorerAdapter
 from aegis.evaluation.scorer import RuleBasedScorer
+from aegis.evidence.store import EvidenceTraceStore
 from aegis.interfaces.attack import AttackModule
 from aegis.interfaces.scorer import Scorer
 from aegis.interfaces.scorer_protocol import ScorerProtocol
@@ -28,6 +29,7 @@ from aegis.models import (
     OWASPCategoryResult,
     SecurityReport,
     Severity,
+    TraceRecord,
 )
 from aegis.reporting.owasp_mapper import get_owasp_info
 from aegis.testbed.agent import DefaultAgent
@@ -56,7 +58,9 @@ class AEGISOrchestrator:
         self.agent = DefaultAgent(config=dict(self.config["testbed"]))
         self.attacks = self._load_attacks()
 
-        configured_scorers = list(scorers) if scorers is not None else self._load_scorers()
+        configured_scorers: list[Scorer] = (
+            list(scorers) if scorers is not None else self._load_scorers()
+        )
         if protocol_scorers:
             configured_scorers.extend(ProtocolScorerAdapter(scorer) for scorer in protocol_scorers)
         if not configured_scorers:
@@ -199,6 +203,8 @@ class AEGISOrchestrator:
         output_dir = Path(self.config["reporting"].get("output_dir", "./reports"))
         output_dir.mkdir(parents=True, exist_ok=True)
         results_path = output_dir / f"attack_results_{run_id}.jsonl"
+        trace_store = EvidenceTraceStore(output_dir)
+        trace_records: list[TraceRecord] = []
 
         errors: list[dict[str, Any]] = []
         count = 0
@@ -223,13 +229,16 @@ class AEGISOrchestrator:
 
                 for result in results:
                     fh.write(result.model_dump_json() + "\n")
+                    trace_records.append(_trace_record_from_attack_result(result))
                     count += 1
 
+        trace_path = trace_store.append_many(run_id=run_id, records=trace_records)
         self._last_run_errors = errors
         logger.info(
-            "Saved %d attack results to %s (run_id=%s, errors=%d)",
+            "Saved %d attack results to %s and traces to %s (run_id=%s, errors=%d)",
             count,
             results_path,
+            trace_path,
             run_id,
             len(errors),
         )
@@ -540,6 +549,44 @@ def _make_error_record(module: str, phase: str, exc: Exception) -> dict[str, Any
         "error": str(exc),
         "traceback": "".join(traceback.format_exception(type(exc), exc, exc.__traceback__)),
     }
+
+
+def _trace_record_from_attack_result(result: AttackResult) -> TraceRecord:
+    payload = result.payload
+    response = result.response
+    return TraceRecord(
+        campaign_id=result.run_id,
+        turn_id=payload.id,
+        turn_index=_metadata_int(payload.metadata.get("turn_index"), default=0),
+        timestamp=result.timestamp,
+        target_fingerprint=response.agent_profile,
+        context_source=payload.metadata.get("context_source"),
+        delegated_identity=payload.metadata.get("delegated_identity"),
+        peer_message_meta=payload.metadata.get("peer_message_meta"),
+        approval_summary=payload.metadata.get("approval_summary"),
+        actual_action=payload.metadata.get("actual_action"),
+        tool_calls=[tool.model_dump(mode="json") for tool in response.tool_calls],
+        prompts=list(payload.messages),
+        responses=list(response.messages),
+        context={
+            "payload_id": payload.id,
+            "attack_module": payload.attack_module,
+            "injected_context": payload.injected_context,
+        },
+        fixture_state=payload.metadata.get("fixture_state"),
+        defense_decisions=(
+            [{"defense": response.defense_active, "decision": "active"}]
+            if response.defense_active
+            else None
+        ),
+    )
+
+
+def _metadata_int(value: Any, default: int) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
 
 
 def _truncate_text(text: str, max_len: int = 220) -> str:

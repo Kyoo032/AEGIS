@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import plotly.graph_objects as go
-import pytest
 
 from dashboard.utils.charts import (
     defense_comparison_bar,

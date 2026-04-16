@@ -6,9 +6,14 @@ import pytest
 from aegis.attacks import ATTACK_MODULES, get_all_modules, get_module
 from aegis.attacks.asi01_goal_hijack import GoalHijackModule
 from aegis.attacks.asi02_tool_misuse import ToolMisuseModule
+from aegis.attacks.asi03_identity_privilege import IdentityPrivilegeModule
 from aegis.attacks.asi04_supply_chain import SupplyChainModule
 from aegis.attacks.asi05_code_exec import CodeExecModule
 from aegis.attacks.asi06_memory_poison import MemoryPoisonModule
+from aegis.attacks.asi07_inter_agent import InterAgentTrustModule
+from aegis.attacks.asi_dynamic_cloak import DynamicCloakModule
+from aegis.attacks.asi_semantic_manip import SemanticManipulationModule
+from aegis.attacks.llm01_crosslingual import CrossLingualPromptInjectionModule
 from aegis.attacks.llm01_prompt_inject import PromptInjectionModule
 from aegis.attacks.llm02_data_disclosure import DataDisclosureModule
 from aegis.attacks.mcp06_cmd_injection import CmdInjectionModule
@@ -35,10 +40,15 @@ MINIMAL_TARGET_CONFIG = {
 ALL_MODULE_CLASSES = [
     GoalHijackModule,
     ToolMisuseModule,
+    IdentityPrivilegeModule,
     SupplyChainModule,
     CodeExecModule,
     MemoryPoisonModule,
+    InterAgentTrustModule,
+    DynamicCloakModule,
+    SemanticManipulationModule,
     CmdInjectionModule,
+    CrossLingualPromptInjectionModule,
     PromptInjectionModule,
     DataDisclosureModule,
 ]
@@ -46,13 +56,20 @@ ALL_MODULE_CLASSES = [
 EXPECTED_MODULES = {
     "asi01_goal_hijack": ("ASI01", "AML.T0051"),
     "asi02_tool_misuse": ("ASI02", "AML.T0040"),
+    "asi03_identity_privilege": ("ASI03", None),
     "asi04_supply_chain": ("ASI04", "AML.T0010"),
     "asi05_code_exec": ("ASI05", "AML.T0051"),
     "asi06_memory_poison": ("ASI06", "AML.T0020"),
+    "asi07_inter_agent": ("ASI07", None),
+    "asi_dynamic_cloak": ("ASI-DYNAMIC-CLOAK", None),
+    "asi_semantic_manip": ("ASI-SEMANTIC-MANIP", None),
     "mcp06_cmd_injection": ("MCP06", "AML.T0040"),
+    "llm01_crosslingual": ("LLM01", "AML.T0051"),
     "llm01_prompt_inject": ("LLM01", "AML.T0051"),
     "llm02_data_disclosure": ("LLM02", "AML.T0024"),
 }
+
+EMPTY_SCAFFOLD_MODULES = set()
 
 
 class TestModuleRegistry:
@@ -107,7 +124,10 @@ class TestPayloadGeneration:
     def test_generates_payloads_full_config(self, module_cls):
         module = module_cls()
         payloads = module.generate_payloads(FULL_TARGET_CONFIG)
-        assert len(payloads) > 0
+        if module.name in EMPTY_SCAFFOLD_MODULES:
+            assert payloads == []
+        else:
+            assert len(payloads) > 0
 
     def test_payloads_are_attack_payload_type(self, module_cls):
         module = module_cls()
