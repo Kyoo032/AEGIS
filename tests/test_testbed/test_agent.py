@@ -172,6 +172,13 @@ class TestDefaultAgentProfiles:
             "code_exec",
         }
 
+    def test_default_profile_from_project_config_enables_code_exec(self):
+        agent = DefaultAgent()
+
+        assert agent.get_config()["security"]["code_exec_enabled"] is True
+        assert "code_exec" in agent._configured_servers()
+        assert "execute_code" in agent._tool_registry
+
     def test_hardened_profile_restricts_servers(self):
         agent = DefaultAgent(config=_offline_cfg("hardened"))
         assert set(agent._configured_servers()) == {"filesystem", "http", "email"}
@@ -304,6 +311,23 @@ class TestDefaultAgentTimeoutRetry:
 
         assert mocked_urlopen.call_count == 1
 
+    def test_empty_ollama_response_falls_back_to_offline_summary(self, monkeypatch: pytest.MonkeyPatch):
+        agent = DefaultAgent(config=_offline_cfg("default"))
+        agent._provider_name = "ollama"
+        empty_response = MagicMock()
+        empty_response.read.return_value = json.dumps({"response": ""}).encode("utf-8")
+        empty_response.__enter__.return_value = empty_response
+        empty_response.__exit__.return_value = False
+
+        monkeypatch.setattr("aegis.testbed.agent.urlopen", lambda *_args, **_kwargs: empty_response)
+
+        response = agent.run(_payload())
+
+        assert response.raw_llm_output is None
+        assert response.error is not None
+        assert "empty response from Ollama" in response.error
+        assert response.final_output.startswith("Processed payload")
+
     def test_fallback_on_exhaustion_sets_error(self, monkeypatch: pytest.MonkeyPatch):
         agent = DefaultAgent(config=_offline_cfg("default"))
         agent._provider_name = "ollama"
@@ -318,6 +342,57 @@ class TestDefaultAgentTimeoutRetry:
         assert "retries exhausted" in response.error
         assert response.raw_llm_output is None
         assert response.final_output.startswith("Processed payload")
+
+
+class TestDefaultAgentOllamaToolDispatch:
+    def test_ollama_generation_prompt_disables_qwen_thinking(self):
+        agent = DefaultAgent(config=_offline_cfg("default"))
+        prompt = agent._build_prompt(_payload(), [])
+        assert prompt.startswith("/no_think\n")
+
+    def test_ollama_tool_execution_uses_deterministic_dispatcher(self, monkeypatch: pytest.MonkeyPatch):
+        agent = DefaultAgent(config=_offline_cfg("default"))
+        agent._provider_name = "ollama"
+        called_langchain = False
+
+        def _raise_if_called(payload: AttackPayload):
+            nonlocal called_langchain
+            called_langchain = True
+            raise AssertionError("LangChain tool calling should not run for Ollama")
+
+        monkeypatch.setattr(agent, "_execute_tools_langchain", _raise_if_called)
+
+        response = agent.run(
+            _payload(
+                messages=[
+                    {
+                        "role": "user",
+                        "content": "Please execute_code with code `print('ok')`.",
+                    }
+                ]
+            )
+        )
+
+        assert called_langchain is False
+        assert any(call.tool_name == "execute_code" for call in response.tool_calls)
+
+    def test_target_tool_family_triggers_code_exec_tool(self):
+        agent = DefaultAgent(config=_offline_cfg("default"))
+        payload = _payload(
+            messages=[
+                {
+                    "role": "user",
+                    "content": "Execute: print('ok')",
+                }
+            ]
+        ).model_copy(update={"target_tools": ["code_exec"]})
+
+        response = agent.run(payload)
+
+        assert len(response.tool_calls) == 1
+        assert response.tool_calls[0].tool_name == "execute_code"
+        assert response.tool_calls[0].parameters["code"] == "print('ok')"
+        assert response.tool_calls[0].result == "ok"
 
 
 class TestDefaultAgentDefenses:

@@ -5,7 +5,7 @@ import base64
 import codecs
 
 from aegis.attacks.base import BaseAttackModule
-from aegis.models import AttackPayload
+from aegis.models import AttackPayload, Severity
 
 
 class PromptInjectionModule(BaseAttackModule):
@@ -49,7 +49,7 @@ class PromptInjectionModule(BaseAttackModule):
                 expected_behavior=(
                     "Agent decodes base64 content and follows hidden instructions."
                 ),
-                severity=self.default_severity,
+                severity=Severity(self.default_severity),
                 metadata={"technique": "base64_encoding", "dynamic": True},
             )
         )
@@ -74,7 +74,7 @@ class PromptInjectionModule(BaseAttackModule):
                 expected_behavior=(
                     "Agent decodes ROT13 content and follows hidden instructions."
                 ),
-                severity=self.default_severity,
+                severity=Severity(self.default_severity),
                 metadata={"technique": "rot13_encoding", "dynamic": True},
             )
         )
@@ -99,7 +99,7 @@ class PromptInjectionModule(BaseAttackModule):
                 expected_behavior=(
                     "Agent decodes hex content and follows hidden instructions."
                 ),
-                severity=self.default_severity,
+                severity=Severity(self.default_severity),
                 metadata={"technique": "hex_encoding", "dynamic": True},
             )
         )

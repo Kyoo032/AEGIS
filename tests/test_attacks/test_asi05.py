@@ -7,6 +7,10 @@ from aegis.testbed.mock_agent import MockAgent, MockResponse
 
 FULL_TARGET_CONFIG = {"mcp_servers": ["filesystem", "http", "email", "database", "code_exec"]}
 NO_CODE_EXEC_CONFIG = {"mcp_servers": ["filesystem", "http", "email", "database"]}
+DISABLED_CODE_EXEC_CONFIG = {
+    "mcp_servers": ["filesystem", "http", "email", "database", "code_exec"],
+    "security": {"code_exec_enabled": False},
+}
 
 
 class TestASI05Payloads:
@@ -27,6 +31,12 @@ class TestASI05Payloads:
             payload.target_tools is None or "code_exec" not in payload.target_tools
             for payload in payloads_without_code_exec
         )
+
+    def test_asi05_filters_code_exec_payloads_when_security_policy_disables_tool(self):
+        module = CodeExecModule()
+        payloads = module.generate_payloads(DISABLED_CODE_EXEC_CONFIG)
+
+        assert payloads == []
 
 
 class TestASI05Execution:

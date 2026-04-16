@@ -134,6 +134,30 @@ class AttackResult(BaseModel):
     """Groups results from same batch"""
 
 
+class TraceRecord(BaseModel):
+    """Per-turn v2 campaign evidence trace record."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    campaign_id: str
+    turn_id: str
+    turn_index: int
+    timestamp: datetime
+    target_fingerprint: str | None = None
+    context_source: str | None = None
+    delegated_identity: dict[str, Any] | None = None
+    peer_message_meta: dict[str, Any] | None = None
+    approval_summary: str | None = None
+    actual_action: str | None = None
+    tool_calls: list[dict[str, Any]] | None = None
+    scorer_rationale: str | None = None
+    prompts: list[dict[str, Any]] | None = None
+    responses: list[dict[str, Any]] | None = None
+    context: dict[str, Any] | None = None
+    fixture_state: dict[str, Any] | None = None
+    defense_decisions: list[dict[str, Any]] | None = None
+
+
 class EvaluationResult(BaseModel):
     """What the scorer produces."""
 

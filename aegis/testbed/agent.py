@@ -610,7 +610,7 @@ class DefaultAgent(AgentInterface):
         return tool_calls
 
     def _execute_tools_llm(self, payload: AttackPayload) -> list[ToolCall]:
-        if self._provider_name == "huggingface":
+        if self._provider_name in {"ollama", "huggingface"}:
             return self._execute_tools_offline(payload)
         try:
             return self._execute_tools_langchain(payload)
@@ -636,10 +636,11 @@ class DefaultAgent(AgentInterface):
             ai_message = model_with_tools.invoke(messages)
             messages.append(ai_message)
 
-            if not getattr(ai_message, "tool_calls", None):
+            tool_call_items = getattr(ai_message, "tool_calls", None)
+            if not tool_call_items:
                 break
 
-            for tc in ai_message.tool_calls:
+            for tc in tool_call_items:
                 name = tc["name"]
                 args = tc.get("args", {})
                 blocked, blocked_by, blocked_reason = self._inspect_tool_call(name, args, run_state)
@@ -717,10 +718,12 @@ class DefaultAgent(AgentInterface):
 
         provider_cfg = self._config.get("provider", {})
         model_name = str(self._config.get("model", "qwen3:4b"))
-        timeout_seconds = float(
-            provider_cfg.get(
-                "ollama_generate_timeout_seconds",
-                self._config.get("llm_timeout_seconds", 30),
+        timeout_seconds = int(
+            float(
+                provider_cfg.get(
+                    "ollama_generate_timeout_seconds",
+                    self._config.get("llm_timeout_seconds", 30),
+                )
             )
         )
         num_predict = int(provider_cfg.get("ollama_num_predict", 128))
@@ -783,6 +786,13 @@ class DefaultAgent(AgentInterface):
             args = self._extract_tool_args(tool_fn, last_user_text)
             plans.append((tool_name, args))
 
+        planned_names = {name for name, _args in plans}
+        target_tools = payload.target_tools or []
+        if "code_exec" in {str(name).lower() for name in target_tools}:
+            tool_fn = self._tool_registry.get("execute_code")
+            if tool_fn is not None and "execute_code" not in planned_names:
+                plans.append(("execute_code", self._extract_tool_args(tool_fn, last_user_text)))
+
         return plans
 
     def _extract_tool_args(
@@ -809,7 +819,20 @@ class DefaultAgent(AgentInterface):
             return match.group(0) if match else None
         if param_name in ("code", "sql"):
             backtick = re.search(r"`([^`]+)`", message)
-            return backtick.group(1) if backtick else None
+            if backtick:
+                return backtick.group(1)
+            if param_name == "code":
+                code_match = re.search(
+                    r"\b(?:execute|run):\s*(.+)$",
+                    message,
+                    flags=re.IGNORECASE | re.DOTALL,
+                )
+                if code_match:
+                    return code_match.group(1).strip()
+                import_match = re.search(r"\bimport\s+.+$", message, flags=re.IGNORECASE | re.DOTALL)
+                if import_match:
+                    return import_match.group(0).strip()
+            return None
         return None
 
     # ------------------------------------------------------------------
@@ -829,7 +852,8 @@ class DefaultAgent(AgentInterface):
                     llm_output = self._call_hf(prompt)
                 return llm_output, llm_output, None
             except LLMCallError as exc:
-                logger.warning("Provider call failed; using offline summary: %s", exc)
+                log = logger.info if "empty response from Ollama" in str(exc) else logger.warning
+                log("Provider call failed; using offline summary: %s", exc)
                 return self._offline_summary(payload, tool_calls), None, str(exc)
 
         return self._offline_summary(payload, tool_calls), None, None
@@ -840,6 +864,7 @@ class DefaultAgent(AgentInterface):
         rag_lines = list(self._kb_context_lines) if self._kb_context_lines else list(self._injected_rag)
         return "\n".join(
             [
+                "/no_think",
                 "You are the AEGIS target agent.",
                 *turns,
                 "Tool results:",
@@ -883,7 +908,10 @@ class DefaultAgent(AgentInterface):
             except json.JSONDecodeError as exc:
                 raise ValueError("invalid JSON from Ollama /api/generate") from exc
             content = parsed.get("response", "")
-            return str(content).strip() or "No response from Ollama model."
+            text = str(content).strip()
+            if not text:
+                raise ValueError("empty response from Ollama /api/generate")
+            return text
 
         return call_with_retry(
             _invoke,

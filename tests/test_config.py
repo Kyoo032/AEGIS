@@ -13,6 +13,7 @@ class TestLoadConfig:
         assert "defenses" in config
         assert "reporting" in config
         assert config["testbed"]["model"] == "qwen3:4b"
+        assert config["testbed"]["provider"]["ollama_num_predict"] == 128
         assert config["testbed"]["security"]["code_exec_enabled"] is False
 
     def test_load_missing_file_raises(self):

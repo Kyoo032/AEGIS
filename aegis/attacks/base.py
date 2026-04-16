@@ -124,7 +124,8 @@ class BaseAttackModule(AttackModule):
         Raises:
             ValueError: If the module name would escape the payloads directory.
         """
-        payloads_dir = Path(__file__).parent / "payloads"
+        package_payloads_dir = Path(__file__).parent / "payloads"
+        dataset_payloads_dir = Path.cwd() / "datasets" / "payloads"
 
         if not _SAFE_MODULE_NAME.match(self.name):
             msg = (
@@ -133,16 +134,19 @@ class BaseAttackModule(AttackModule):
             )
             raise ValueError(msg)
 
-        resolved = (payloads_dir / f"{self.name}.yaml").resolve()
+        candidate_dirs = [dataset_payloads_dir, package_payloads_dir]
+        for payloads_dir in candidate_dirs:
+            resolved = (payloads_dir / f"{self.name}.yaml").resolve()
+            if not resolved.is_relative_to(payloads_dir.resolve()):
+                msg = (
+                    f"Invalid module name '{self.name}': "
+                    f"payload path must stay within {payloads_dir}"
+                )
+                raise ValueError(msg)
+            if resolved.exists():
+                return resolved
 
-        if not resolved.is_relative_to(payloads_dir.resolve()):
-            msg = (
-                f"Invalid module name '{self.name}': "
-                f"payload path must stay within {payloads_dir}"
-            )
-            raise ValueError(msg)
-
-        return resolved
+        return (package_payloads_dir / f"{self.name}.yaml").resolve()
 
     def _load_payloads_from_yaml(self) -> dict[str, Any]:
         """Parse YAML file, validate structure, return raw dict.
@@ -247,7 +251,11 @@ class BaseAttackModule(AttackModule):
         servers = target_config.get("mcp_servers", [])
         if not isinstance(servers, list):
             return frozenset()
-        return frozenset(self._normalize_tool_names(servers))
+        available = self._normalize_tool_names(servers)
+        security = target_config.get("security", {})
+        if isinstance(security, dict) and not bool(security.get("code_exec_enabled", True)):
+            available.discard("code_exec")
+        return frozenset(available)
 
     def _normalize_tool_names(self, names: list[str]) -> set[str]:
         out: set[str] = set()

@@ -53,7 +53,7 @@ _DEFAULTS: dict[str, Any] = {
                 "memory_enabled": True,
                 "defenses_active": [],
                 "restrict_servers": False,
-                "security_overrides": {},
+                "security_overrides": {"code_exec_enabled": True},
             },
             "hardened": {
                 "mcp_servers": ["filesystem", "http", "email"],
@@ -125,6 +125,11 @@ _DEFAULTS: dict[str, Any] = {
         "modules": [
             "asi01_goal_hijack",
             "asi02_tool_misuse",
+            "asi03_identity_privilege",
+            "asi_dynamic_cloak",
+            "asi_semantic_manip",
+            "llm01_crosslingual",
+            "asi07_inter_agent",
             "asi04_supply_chain",
             "asi05_code_exec",
             "asi06_memory_poison",

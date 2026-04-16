@@ -19,6 +19,7 @@ if TYPE_CHECKING:
         SecurityReport,
         Severity,
         ToolCall,
+        TraceRecord,
     )
 
 __all__ = [
@@ -32,6 +33,7 @@ __all__ = [
     "SecurityReport",
     "Severity",
     "ToolCall",
+    "TraceRecord",
 ]
 
 

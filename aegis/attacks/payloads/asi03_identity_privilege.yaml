@@ -1,0 +1,5 @@
+module:
+  attack_module: "asi03_identity_privilege"
+  owasp_id: "ASI03"
+  category: "Identity and Privilege Abuse"
+payloads: []
