@@ -18,8 +18,10 @@ def test_llm01_crosslingual_loads_reviewable_payload_metadata():
     assert payloads
     assert all(payload.attack_module == "llm01_crosslingual" for payload in payloads)
     assert all(payload.metadata.get("language") for payload in payloads)
-    assert all("naturalness_reviewed" in payload.metadata for payload in payloads)
-    assert any(payload.metadata.get("native_reviewer") is False for payload in payloads)
+    assert all(payload.metadata.get("naturalness_reviewed") is True for payload in payloads)
+    assert all(payload.metadata.get("native_reviewer") is True for payload in payloads)
+    assert all(payload.metadata.get("naturalness_label") == "natural" for payload in payloads)
+    assert all(payload.metadata.get("native_review_date") == "2026-04-20" for payload in payloads)
 
 
 def test_llm01_crosslingual_execution_resets_per_payload():
