@@ -199,7 +199,7 @@ aegis attack --module asi09_human_trust
 > ### Pre-Phase-5 Cleanup Required (audited 2026-04-20)
 > - [x] Payload metadata normalization: top-level `technique_tag`, `is_negative_control`, `attack_family`, and `version` added for the four audited v2 datasets.
 > - [x] Judge parser / prompt fix: Ollama judge now requests a structured JSON schema; `asi07_inter_agent`, `asi_hitl`, `asi09_human_trust`, and `llm01_crosslingual` smoke runs no longer show unparseable judge output.
-> - [ ] Indonesian naturalness pass for `llm01_crosslingual` (26 payloads still marked `native_reviewer: false`).
+> - [x] Indonesian naturalness pass for `llm01_crosslingual` completed 2026-04-20: all 26 payloads Kyo-reviewed and accepted.
 > - [ ] Phase 5a rubric calibration for all 7 modules (all rubrics still need documented threshold/concordance/structured rationale).
 
 | Area | Tasks | Done When |
