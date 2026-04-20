@@ -153,9 +153,9 @@ aegis attack --module asi_semantic_manip
 
 ## Phase 3: Cross-Lingual + Trust Boundary Modules
 
-> **Status:** Completed 2026-04-16
+> **Status:** Completed 2026-04-16; audited 2026-04-20 with pre-Phase-5 cleanup required.
 > **Goal:** Ship the cross-lingual and inter-agent modules. Crosslingual dataset curation from Phase 1 parallel track lands here.
-> **Gate:** Passed — both Phase 3 modules emit attack results, trace evidence, scored findings, and reports with no run errors.
+> **Gate:** Partially passed — both Phase 3 modules exist and emit reports, but the 2026-04-20 audit found dataset gate debt: payload YAMLs do not expose top-level `technique_tag` / `is_negative_control`, and smoke runs showed scorer disagreement / judge reliability issues that belong in Phase 5a calibration.
 
 | Module | Key Techniques | Coverage Gate | Scoring Signals |
 |--------|----------------|---------------|-----------------|
@@ -172,9 +172,9 @@ aegis attack --module asi07_inter_agent
 
 ## Phase 4: HITL + Human Trust Modules
 
-> **Status:** Completed 2026-04-16
+> **Status:** In Progress as of audit 2026-04-20; modules exist, but gate cleanup remains.
 > **Goal:** Complete the v2 module set.
-> **Gate:** Passed — `asi_hitl` and `asi09_human_trust` emit attack results, trace evidence, scored findings, and reports with no run errors.
+> **Gate:** Partially passed — `asi_hitl` and `asi09_human_trust` exist and emit reports, but the 2026-04-20 audit found dataset gate debt: payload YAMLs do not expose top-level `technique_tag` / `is_negative_control`; `asi_hitl` smoke run also showed LLM judge parse failures that belong in Phase 5a calibration.
 
 | Module | Key Techniques | Coverage Gate | Scoring Signals |
 |--------|----------------|---------------|-----------------|
@@ -192,7 +192,9 @@ aegis attack --module asi09_human_trust
 
 ## Phase 5: Evaluation, Reporting, Defense Matrix
 
+> **Status:** In Progress as of audit 2026-04-20.
 > **Goal:** Make v2 findings auditable for publication and comparison against v1.
+> **Audit note:** Phase 5a is required before matrix publication: rubric finalization is `7/7` incomplete by calibration/concordance criteria, top-level dataset metadata gates fail for the four audited modules, `--dry-run` is not implemented, and module smoke runs surfaced scorer disagreement / judge parse issues.
 
 | Area | Tasks | Done When |
 |------|-------|-----------|
