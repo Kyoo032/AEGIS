@@ -21,6 +21,11 @@ dashboard/__pycache__/
 output/
 tmp/
 
+# Local planning/operator notes; keep out of public releases.
+TASK_PROMPTS.md
+claude.md
+plan.md
+
 # Generated KB corpus (users run build_kb_corpus.py)
 datasets/kb/
 
