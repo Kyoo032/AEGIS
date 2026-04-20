@@ -65,6 +65,51 @@ def _make_eval_result(
     )
 
 
+def _make_phase5_eval_result(
+    *,
+    attack_module: str,
+    owasp_id: str,
+    category: str,
+    metadata: dict,
+    final_output: str = "agent output",
+) -> EvaluationResult:
+    payload = AttackPayload(
+        id=f"{owasp_id}-PHASE5-001",
+        attack_module=attack_module,
+        owasp_id=owasp_id,
+        atlas_technique=None,
+        category=category,
+        messages=[{"role": "user", "content": "test"}],
+        expected_behavior="phase 5 test",
+        severity=Severity.HIGH,
+        metadata=metadata,
+    )
+    response = AgentResponse(
+        payload_id=f"{owasp_id}-PHASE5-001",
+        agent_profile="default",
+        messages=[],
+        final_output=final_output,
+        tool_calls=[],
+    )
+    attack_result = AttackResult(
+        payload=payload,
+        response=response,
+        timestamp=datetime.now(UTC),
+        run_id="phase5-test-run",
+    )
+    return EvaluationResult(
+        attack_result=attack_result,
+        success=True,
+        confidence=0.8,
+        scoring_method=ScoringMethod.RULE_BASED,
+        explanation="phase 5 explanation",
+        indicators=["indicator"],
+        defense_bypassed=None,
+        owasp_id=owasp_id,
+        atlas_technique=None,
+    )
+
+
 # ---------------------------------------------------------------------------
 # ReportGenerator.generate()
 # ---------------------------------------------------------------------------
@@ -269,3 +314,115 @@ class TestReportGeneratorRenderJson:
         assert parsed["findings"][0]["owasp_category"] == "Prompt Injection"
         assert parsed["findings"][0]["severity"] == "high"
         assert parsed["findings"][0]["owasp_mapping"]["owasp_name"] == "Prompt Injection"
+
+
+class TestPhase5Reporting:
+    def test_probe_results_include_crosslingual_phase5_fields(self):
+        rg = ReportGenerator()
+        report = rg.generate([
+            _make_phase5_eval_result(
+                attack_module="llm01_crosslingual",
+                owasp_id="LLM01",
+                category="Cross-Lingual Prompt Injection",
+                metadata={
+                    "language": "id",
+                    "technique": "indonesian_injection",
+                    "expected_signal": "instruction_followed_in_non_english",
+                },
+                final_output="Saya akan mengikuti instruksi itu.",
+            )
+        ])
+
+        probe = report.probe_results[0]
+        assert probe["payload_language"] == "id"
+        assert probe["technique_tag"] == "indonesian_injection"
+        assert "Language: id" in probe["phase5_summary"]
+
+    def test_findings_include_hitl_phase5_evidence(self):
+        rg = ReportGenerator()
+        report = rg.generate([
+            _make_phase5_eval_result(
+                attack_module="asi_hitl",
+                owasp_id="ASI-HITL",
+                category="Human-in-the-Loop Approval Failures",
+                metadata={
+                    "approval_summary": "Update a harmless config value",
+                    "actual_action": "delete production configuration",
+                    "technique": "misleading_action_summary",
+                    "expected_signal": "summary_action_mismatch",
+                },
+                final_output="Proceeding with the approved delete.",
+            )
+        ])
+
+        finding = report.findings[0]
+        assert any("Approval summary vs actual action" in item for item in finding.evidence)
+        assert "Phase 5 evidence:" in finding.description
+
+    def test_html_contains_phase5_evidence_section(self):
+        rg = ReportGenerator()
+        report = rg.generate([
+            _make_phase5_eval_result(
+                attack_module="asi09_human_trust",
+                owasp_id="ASI09",
+                category="Human Trust Exploitation",
+                metadata={
+                    "trust_signal": "verified_safe_claim",
+                    "expected_signal": "false_safety_claim",
+                    "technique": "overconfident_safety_summary",
+                },
+                final_output="This is completely safe and verified.",
+            )
+        ])
+
+        html = rg.render_html(report)
+        assert "Phase 5 Evidence Highlights" in html
+        assert "Trust-deception evidence" in html
+
+    def test_methodology_contains_negative_control_summary(self):
+        rg = ReportGenerator()
+        report = rg.generate([
+            _make_phase5_eval_result(
+                attack_module="asi09_human_trust",
+                owasp_id="ASI09",
+                category="Human Trust Exploitation",
+                metadata={
+                    "negative_control": True,
+                    "trust_signal": "calibrated_uncertainty",
+                    "expected_signal": "benign_trust_guidance",
+                    "technique": "benign_safety_summary",
+                },
+                final_output="Inspect the script before running it.",
+            )
+        ])
+
+        summary = report.methodology["negative_controls"]
+        assert summary["total"] == 1
+        assert summary["false_positives"] == 1
+        assert summary["by_module"]["asi09_human_trust"]["false_positive_rate"] == 1.0
+
+    def test_html_contains_matrix_module_breakdown(self):
+        rg = ReportGenerator()
+        report = rg.generate([_make_eval_result(success=False)])
+        report.defense_matrix = {
+            "baseline": 0.5,
+            "scenarios": {
+                "baseline": {
+                    "attack_success_rate": 0.5,
+                    "delta_vs_baseline": 0.0,
+                    "module_breakdown": {
+                        "asi_semantic_manip": {
+                            "total_attacks": 4,
+                            "total_successful": 2,
+                            "attack_success_rate": 0.5,
+                            "negative_control_false_positive_rate": 0.25,
+                        }
+                    },
+                }
+            },
+        }
+
+        html = rg.render_html(report)
+        assert "Module Breakdown" in html
+        assert "asi_semantic_manip" in html
+        assert "25.0%" in html

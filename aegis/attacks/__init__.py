@@ -6,7 +6,9 @@ from aegis.attacks.asi04_supply_chain import SupplyChainModule
 from aegis.attacks.asi05_code_exec import CodeExecModule
 from aegis.attacks.asi06_memory_poison import MemoryPoisonModule
 from aegis.attacks.asi07_inter_agent import InterAgentTrustModule
+from aegis.attacks.asi09_human_trust import HumanTrustDeceptionModule
 from aegis.attacks.asi_dynamic_cloak import DynamicCloakModule
+from aegis.attacks.asi_hitl import HITLApprovalModule
 from aegis.attacks.asi_semantic_manip import SemanticManipulationModule
 from aegis.attacks.base import BaseAttackModule
 from aegis.attacks.llm01_crosslingual import CrossLingualPromptInjectionModule
@@ -22,7 +24,9 @@ ATTACK_MODULES = {
     "asi05_code_exec": CodeExecModule,
     "asi06_memory_poison": MemoryPoisonModule,
     "asi07_inter_agent": InterAgentTrustModule,
+    "asi09_human_trust": HumanTrustDeceptionModule,
     "asi_dynamic_cloak": DynamicCloakModule,
+    "asi_hitl": HITLApprovalModule,
     "asi_semantic_manip": SemanticManipulationModule,
     "mcp06_cmd_injection": CmdInjectionModule,
     "llm01_crosslingual": CrossLingualPromptInjectionModule,
@@ -56,6 +60,8 @@ __all__ = [
     "DataDisclosureModule",
     "DynamicCloakModule",
     "GoalHijackModule",
+    "HITLApprovalModule",
+    "HumanTrustDeceptionModule",
     "IdentityPrivilegeModule",
     "InterAgentTrustModule",
     "MemoryPoisonModule",

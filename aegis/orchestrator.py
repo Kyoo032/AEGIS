@@ -4,7 +4,6 @@ from __future__ import annotations
 import json
 import logging
 import traceback
-from collections import defaultdict
 from collections.abc import Callable
 from datetime import UTC, datetime
 from importlib import import_module
@@ -22,27 +21,11 @@ from aegis.evidence.store import EvidenceTraceStore
 from aegis.interfaces.attack import AttackModule
 from aegis.interfaces.scorer import Scorer
 from aegis.interfaces.scorer_protocol import ScorerProtocol
-from aegis.models import (
-    AttackResult,
-    EvaluationResult,
-    Finding,
-    OWASPCategoryResult,
-    SecurityReport,
-    Severity,
-    TraceRecord,
-)
-from aegis.reporting.owasp_mapper import get_owasp_info
+from aegis.models import AttackResult, EvaluationResult, SecurityReport, TraceRecord
+from aegis.reporting.report_generator import ReportGenerator
 from aegis.testbed.agent import DefaultAgent
 
 logger = logging.getLogger(__name__)
-
-_RECOMMENDATIONS_BY_SEVERITY: dict[Severity, str] = {
-    Severity.CRITICAL: "Block high-risk tool invocations with strict policy gating.",
-    Severity.HIGH: "Strengthen instruction boundary checks and output filtering.",
-    Severity.MEDIUM: "Tighten tool parameter validation and monitoring coverage.",
-    Severity.LOW: "Track low-risk findings and add regression tests.",
-    Severity.INFORMATIONAL: "Monitor observed behavior and keep regression coverage up to date.",
-}
 
 
 class AEGISOrchestrator:
@@ -177,9 +160,10 @@ class AEGISOrchestrator:
             for finding in report.findings:
                 finding.delta_vs_baseline = delta
 
-        matrix_path = self._write_matrix_summary(reports)
+        matrix_path, matrix_payload = self._write_matrix_summary(reports)
         for scenario, report in reports.items():
             report.defense_matrix = {
+                **matrix_payload,
                 "scenario": scenario,
                 "summary_path": str(matrix_path),
             }
@@ -294,98 +278,12 @@ class AEGISOrchestrator:
         defense_name: str | None,
         run_errors: list[dict[str, Any]] | None = None,
     ) -> SecurityReport:
-        grouped: dict[str, list[EvaluationResult]] = defaultdict(list)
-        findings: list[Finding] = []
-        recommendations: set[str] = set()
-        probe_results: list[dict[str, Any]] = []
-
-        for eval_result in eval_results:
-            grouped[eval_result.owasp_id].append(eval_result)
-
-            payload = eval_result.attack_result.payload
-            retrieval_trace = eval_result.attack_result.response.retrieval_trace or []
-            included_hits = [
-                item for item in retrieval_trace if isinstance(item, dict) and bool(item.get("included"))
-            ]
-            poisoned_included = [
-                item for item in included_hits if bool(item.get("is_poisoned"))
-            ]
-            probe_results.append(
-                {
-                    "probe_id": payload.id,
-                    "module": payload.attack_module,
-                    "owasp_id": payload.owasp_id,
-                    "owasp_category": payload.category,
-                    "passed": not eval_result.success,
-                    "success": eval_result.success,
-                    "score": eval_result.confidence,
-                    "score_method": str(eval_result.scoring_method),
-                    "response_snippet": _truncate_text(eval_result.attack_result.response.final_output),
-                    "retrieval_trace_count": len(retrieval_trace),
-                    "retrieval_included_count": len(included_hits),
-                    "retrieval_poisoned_included_count": len(poisoned_included),
-                }
-            )
-
-            if not eval_result.success:
-                continue
-
-            owasp_info = get_owasp_info(payload.owasp_id)
-            evidence = eval_result.indicators or [eval_result.attack_result.response.final_output]
-            finding = Finding(
-                title=f"{payload.owasp_id} attack succeeded ({payload.id})",
-                owasp_id=payload.owasp_id,
-                owasp_category=owasp_info["name"],
-                atlas_technique=payload.atlas_technique,
-                mitre_atlas_id=payload.atlas_technique,
-                severity=payload.severity,
-                description=eval_result.explanation,
-                evidence=evidence[:5],
-                recommendation=_RECOMMENDATIONS_BY_SEVERITY[payload.severity],
-            )
-            findings.append(finding)
-            recommendations.add(_RECOMMENDATIONS_BY_SEVERITY[payload.severity])
-
-        results_by_owasp: dict[str, OWASPCategoryResult] = {}
-        for owasp_id, items in grouped.items():
-            total = len(items)
-            successful = sum(1 for item in items if item.success)
-            attack_success_rate = successful / total if total else 0.0
-            default_name = items[0].attack_result.payload.category if items else owasp_id
-            category_name = get_owasp_info(owasp_id).get("name") or default_name
-            category_findings = [finding for finding in findings if finding.owasp_id == owasp_id]
-            results_by_owasp[owasp_id] = OWASPCategoryResult(
-                owasp_id=owasp_id,
-                category_name=category_name,
-                total_attacks=total,
-                successful_attacks=successful,
-                attack_success_rate=attack_success_rate,
-                findings=category_findings,
-            )
-
-        total_attacks = len(eval_results)
-        total_successful = sum(1 for item in eval_results if item.success)
-        attack_success_rate = (total_successful / total_attacks) if total_attacks else 0.0
-        if not recommendations:
-            recommendations.add("No successful attacks detected; maintain current controls.")
-
-        defense_comparison = None
-        if defense_name is not None:
-            defense_comparison = {"defense_name": defense_name}
-
-        return SecurityReport(
-            report_id=f"report-{uuid4()}",
-            generated_at=datetime.now(UTC),
+        generator = ReportGenerator()
+        return generator.generate(
+            eval_results,
+            defense_name=defense_name,
             testbed_config=self.agent.get_config(),
-            total_attacks=total_attacks,
-            total_successful=total_successful,
-            attack_success_rate=attack_success_rate,
-            results_by_owasp=results_by_owasp,
-            defense_comparison=defense_comparison,
-            findings=findings,
-            recommendations=sorted(recommendations),
-            run_errors=list(run_errors or []),
-            probe_results=probe_results,
+            run_errors=run_errors,
         )
 
     def get_available_attack_modules(self) -> list[str]:
@@ -505,7 +403,7 @@ class AEGISOrchestrator:
             probe_results=[],
         )
 
-    def _write_matrix_summary(self, reports: dict[str, SecurityReport]) -> Path:
+    def _write_matrix_summary(self, reports: dict[str, SecurityReport]) -> tuple[Path, dict[str, Any]]:
         output_dir = Path(self.config["reporting"].get("output_dir", "./reports"))
         output_dir.mkdir(parents=True, exist_ok=True)
         timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
@@ -534,11 +432,64 @@ class AEGISOrchestrator:
                 "delta_vs_baseline": report.attack_success_rate - baseline_rate,
                 "errors": report.run_errors,
                 "probe_results": report.probe_results,
+                "module_breakdown": _module_breakdown(report.probe_results),
+                "negative_control_summary": _negative_control_summary(report.probe_results),
             }
 
         path.write_text(json.dumps(matrix, indent=2), encoding="utf-8")
         logger.info("Wrote defense matrix summary to %s", path)
-        return path
+        return path, matrix
+
+
+def _module_breakdown(probe_results: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    breakdown: dict[str, dict[str, Any]] = {}
+    for probe in probe_results:
+        module = str(probe.get("module") or "unknown")
+        item = breakdown.setdefault(
+            module,
+            {
+                "total_attacks": 0,
+                "total_successful": 0,
+                "attack_success_rate": 0.0,
+                "negative_controls": 0,
+                "negative_control_false_positives": 0,
+                "negative_control_false_positive_rate": 0.0,
+            },
+        )
+        item["total_attacks"] += 1
+        if bool(probe.get("success")):
+            item["total_successful"] += 1
+        if bool(probe.get("is_negative_control")):
+            item["negative_controls"] += 1
+            if bool(probe.get("success")):
+                item["negative_control_false_positives"] += 1
+
+    for item in breakdown.values():
+        item["attack_success_rate"] = (
+            item["total_successful"] / item["total_attacks"]
+            if item["total_attacks"]
+            else 0.0
+        )
+        item["negative_control_false_positive_rate"] = (
+            item["negative_control_false_positives"] / item["negative_controls"]
+            if item["negative_controls"]
+            else 0.0
+        )
+    return breakdown
+
+
+def _negative_control_summary(probe_results: list[dict[str, Any]]) -> dict[str, Any]:
+    total = sum(1 for probe in probe_results if bool(probe.get("is_negative_control")))
+    false_positives = sum(
+        1
+        for probe in probe_results
+        if bool(probe.get("is_negative_control")) and bool(probe.get("success"))
+    )
+    return {
+        "total": total,
+        "false_positives": false_positives,
+        "false_positive_rate": false_positives / total if total else 0.0,
+    }
 
 
 def _make_error_record(module: str, phase: str, exc: Exception) -> dict[str, Any]:

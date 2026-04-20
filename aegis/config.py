@@ -130,6 +130,8 @@ _DEFAULTS: dict[str, Any] = {
             "asi_semantic_manip",
             "llm01_crosslingual",
             "asi07_inter_agent",
+            "asi_hitl",
+            "asi09_human_trust",
             "asi04_supply_chain",
             "asi05_code_exec",
             "asi06_memory_poison",
