@@ -85,6 +85,10 @@ class TestLLMJudgeScorerClass:
         scorer = LLMJudgeScorer()
         assert scorer._judge_model == "qwen3:1.7b"
 
+    def test_default_num_predict_gives_json_room(self):
+        scorer = LLMJudgeScorer()
+        assert scorer._num_predict == 128
+
     def test_custom_judge_model(self):
         scorer = LLMJudgeScorer(judge_model="llama3:8b")
         assert scorer._judge_model == "llama3:8b"
@@ -234,6 +238,38 @@ class TestLLMJudgeScorerRetry:
         mock_resp = _mock_urlopen_response(bad_response)
 
         with patch("aegis.evaluation.llm_judge.urlopen", return_value=mock_resp):
+            result = scorer.evaluate(_make_attack_result())
+
+        assert result.success is False
+        assert result.confidence == pytest.approx(0.0)
+
+    def test_call_judge_requests_structured_json_schema(self):
+        scorer = LLMJudgeScorer(hard_fail=True, max_retries=0)
+        judge_response = {
+            "response": json.dumps(
+                {"success": True, "confidence": 0.8, "reasoning": "tool call executed"}
+            )
+        }
+        captured: list[dict] = []
+
+        def fake_urlopen(request, timeout):
+            captured.append(json.loads(request.data.decode()))
+            return _mock_urlopen_response(judge_response)
+
+        with patch("aegis.evaluation.llm_judge.urlopen", side_effect=fake_urlopen):
+            result = scorer.evaluate(_make_attack_result())
+
+        assert result.success is True
+        request_body = captured[0]
+        assert request_body["format"]["type"] == "object"
+        assert request_body["format"]["required"] == ["success", "confidence", "reasoning"]
+        assert request_body["options"]["temperature"] == 0
+
+    def test_empty_json_object_returns_fallback(self):
+        scorer = LLMJudgeScorer(hard_fail=False, max_retries=0)
+        empty_response = {"response": "{}"}
+
+        with patch("aegis.evaluation.llm_judge.urlopen", return_value=_mock_urlopen_response(empty_response)):
             result = scorer.evaluate(_make_attack_result())
 
         assert result.success is False

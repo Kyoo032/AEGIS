@@ -185,6 +185,35 @@ class TestPayloadBuilding:
         assert len(payloads) == 3
         assert all(isinstance(p, AttackPayload) for p in payloads)
 
+    def test_build_attack_payloads_accepts_phase5_export_metadata(self):
+        module = DummyAttackModule()
+        raw = {
+            "module": {
+                "attack_module": "dummy_attack",
+                "owasp_id": "LLM99",
+                "category": "Dummy",
+            },
+            "payloads": [
+                {
+                    "id": "DUMMY-EXPORT-001",
+                    "messages": [{"role": "user", "content": "test"}],
+                    "expected_behavior": "test",
+                    "severity": "low",
+                    "technique_tag": "benign_control",
+                    "is_negative_control": True,
+                    "attack_family": "dummy_attack",
+                    "version": "v2",
+                },
+            ],
+        }
+
+        payload = module._build_attack_payloads(raw)[0]
+
+        assert payload.metadata["technique"] == "benign_control"
+        assert payload.metadata["negative_control"] is True
+        assert payload.metadata["attack_family"] == "dummy_attack"
+        assert payload.metadata["version"] == "v2"
+
 
 # ---------------------------------------------------------------------------
 # generate_payloads
