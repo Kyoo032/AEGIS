@@ -153,7 +153,9 @@ aegis attack --module asi_semantic_manip
 
 ## Phase 3: Cross-Lingual + Trust Boundary Modules
 
+> **Status:** Completed 2026-04-16
 > **Goal:** Ship the cross-lingual and inter-agent modules. Crosslingual dataset curation from Phase 1 parallel track lands here.
+> **Gate:** Passed — both Phase 3 modules emit attack results, trace evidence, scored findings, and reports with no run errors.
 
 | Module | Key Techniques | Coverage Gate | Scoring Signals |
 |--------|----------------|---------------|-----------------|
@@ -170,7 +172,9 @@ aegis attack --module asi07_inter_agent
 
 ## Phase 4: HITL + Human Trust Modules
 
+> **Status:** Completed 2026-04-16
 > **Goal:** Complete the v2 module set.
+> **Gate:** Passed — `asi_hitl` and `asi09_human_trust` emit attack results, trace evidence, scored findings, and reports with no run errors.
 
 | Module | Key Techniques | Coverage Gate | Scoring Signals |
 |--------|----------------|---------------|-----------------|
@@ -241,6 +245,37 @@ v2 is complete when a fresh clone runs the full scan, generates reports, and cle
 
 ---
 
+## Phase 7: Kyo Product Improvement Pass
+
+> **Goal:** Replace the remaining synthetic or stale publication inputs with Kyo/product-specific evidence before public release.
+> **Timing note:** This is the current improvement snapshot as of 2026-04-16. Treat it as the last release-readiness pass, but re-check it before publication because product behavior, attack modules, payload counts, and benchmark priorities may change after these notes.
+
+| File | Improvement Needed | Done When |
+|------|--------------------|-----------|
+| `datasets/payloads/asi_hitl.yaml` | Replace synthetic approval summaries/actions with real approval UI examples from the target agent product while preserving the summary/action delta and risk escalation structure. | Payloads use realistic approval wording and still cover approval fatigue, misleading summaries, partial disclosure, escalation, and ransomware-as-remediation. |
+| `datasets/payloads/asi09_human_trust.yaml` | Strengthen prompts with real examples of overstated safety, fake citations/compliance, and user-pressure language from agent outputs or support workflows. | Attack and negative-control examples are realistic, calibrated, and publication-safe. |
+| `datasets/payloads/llm01_crosslingual.yaml` | Replace or augment synthetic Indonesian/cross-lingual prompts with real support/chat phrasing and native-speaker review. | Indonesian examples mark native review complete or document why synthetic phrasing remains. |
+| `datasets/payloads/asi07_inter_agent.yaml` | Replace deterministic peer-message chains with real A2A/protocol envelopes from the frameworks AEGIS should benchmark. | Inter-agent payloads include realistic envelopes, sender metadata, delegated capabilities, and replay/session fields. |
+| `README.md` | Refresh stale test/module/payload counts and command examples after the final payload set is locked. | README matches the registered modules, payload totals, current test count, and preferred repo-wide checks. |
+| `aegis/evaluation/rule_detector.py` | Re-check HITL and human-trust fallback scoring against realistic safe-but-not-refusal outputs to reduce false positives. | Rule tests include realistic success, refusal, and calibrated-safe responses. |
+| `aegis/cli.py`, `aegis/testbed/kb/ingest.py`, `aegis/fixtures/hitl_approval.py` | Add focused tests for low-coverage user-facing or fixture paths if time remains. | Coverage gaps are either tested or explicitly deferred with rationale. |
+
+**Gate:**
+```bash
+ruff check .
+pytest -s --cov=aegis --cov-report=term-missing --cov-fail-under=80
+python - <<'PY'
+from aegis.attacks import ATTACK_MODULES, get_all_modules
+cfg = {"mcp_servers": ["filesystem", "http", "email", "database", "code_exec"], "rag_enabled": True, "memory_enabled": True}
+print("modules", len(ATTACK_MODULES))
+print("payloads", sum(len(module.generate_payloads(cfg)) for module in get_all_modules()))
+PY
+```
+
+Phase 7 is complete when all Kyo-specific placeholders have been replaced or deliberately deferred, and the docs state the date and assumptions behind the final counts.
+
+---
+
 ## Build Order (Quick Reference)
 
 | Step | Phase | Work |
@@ -262,6 +297,7 @@ v2 is complete when a fresh clone runs the full scan, generates reports, and cle
 | 15 | 4 | `asi09_human_trust` |
 | 16 | 5 | Finalize scoring, negatives, reports, defense matrix |
 | 17 | 6 | Docs, changelog, release |
+| 18 | 7 | Kyo product improvement pass, stale-count refresh, final assumption check |
 
 ---
 

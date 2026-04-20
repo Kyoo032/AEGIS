@@ -11,7 +11,9 @@ from aegis.attacks.asi04_supply_chain import SupplyChainModule
 from aegis.attacks.asi05_code_exec import CodeExecModule
 from aegis.attacks.asi06_memory_poison import MemoryPoisonModule
 from aegis.attacks.asi07_inter_agent import InterAgentTrustModule
+from aegis.attacks.asi09_human_trust import HumanTrustDeceptionModule
 from aegis.attacks.asi_dynamic_cloak import DynamicCloakModule
+from aegis.attacks.asi_hitl import HITLApprovalModule
 from aegis.attacks.asi_semantic_manip import SemanticManipulationModule
 from aegis.attacks.llm01_crosslingual import CrossLingualPromptInjectionModule
 from aegis.attacks.llm01_prompt_inject import PromptInjectionModule
@@ -45,7 +47,9 @@ ALL_MODULE_CLASSES = [
     CodeExecModule,
     MemoryPoisonModule,
     InterAgentTrustModule,
+    HumanTrustDeceptionModule,
     DynamicCloakModule,
+    HITLApprovalModule,
     SemanticManipulationModule,
     CmdInjectionModule,
     CrossLingualPromptInjectionModule,
@@ -61,7 +65,9 @@ EXPECTED_MODULES = {
     "asi05_code_exec": ("ASI05", "AML.T0051"),
     "asi06_memory_poison": ("ASI06", "AML.T0020"),
     "asi07_inter_agent": ("ASI07", None),
+    "asi09_human_trust": ("ASI09", None),
     "asi_dynamic_cloak": ("ASI-DYNAMIC-CLOAK", None),
+    "asi_hitl": ("ASI-HITL", None),
     "asi_semantic_manip": ("ASI-SEMANTIC-MANIP", None),
     "mcp06_cmd_injection": ("MCP06", "AML.T0040"),
     "llm01_crosslingual": ("LLM01", "AML.T0051"),

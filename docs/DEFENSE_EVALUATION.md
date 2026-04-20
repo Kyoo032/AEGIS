@@ -1,4 +1,40 @@
-# Defense Evaluation (Day 8-9)
+# Defense Evaluation (Phase 5 Update)
+
+Snapshot date: 2026-04-16
+
+This document now distinguishes the historical v1/core defense matrix below from the v2 Phase 5 evaluation lane. The current code path emits the fields needed for a v2 rerun: module-level ASR, negative-control false-positive rate, per-probe Phase 5 evidence, and the full matrix payload attached to each rendered report. A fresh full v2 matrix should be run before publication because Phase 5 payloads and rubrics may still change after this implementation pass. If a newer matrix artifact exists, treat it as the source of truth over the historical numbers below.
+
+## Phase 5 v2 Matrix Contract
+
+A v2 matrix artifact must include, per scenario:
+
+- Overall ASR and delta versus baseline.
+- `module_breakdown` with total probes, successful probes, module ASR, negative-control count, negative-control false positives, and module negative-control FPR.
+- `negative_control_summary` with total negative controls, false positives, and overall FPR.
+- `probe_results` fields for `attack_family`, `technique_tag`, `expected_signal`, `is_negative_control`, and `phase5_summary`.
+
+Interpretation rule: failures by v1 defenses against semantic manipulation, HITL approval mismatch, identity delegation, inter-agent provenance, cross-lingual injection, dynamic cloaking, and human-trust deception are evidence for the v2 thesis. They should not be framed as simple regressions in v1 input filtering.
+
+## Required v2 Run
+
+Run the current v2 matrix after payload/rubric edits settle:
+
+```bash
+uv run aegis matrix --format json --output reports
+uv run python scripts/validate_reports.py --schema matrix reports/*defense_matrix*.json
+```
+
+Then update this document with:
+
+- Matrix artifact path and run date.
+- Per-scenario ASR table.
+- Per-module ASR/FPR table.
+- Cases where FPR exceeds 10%, plus the rubric or exclusion-pattern adjustment needed before release.
+- One short explanation for each v1 defense family describing which v2 attack surfaces it does and does not cover.
+
+---
+
+# Historical Defense Evaluation (Day 8-9)
 
 Run date: 2026-02-24
 Config: `aegis/config.day7_core7.yaml`

@@ -56,22 +56,15 @@ class ReportGenerator:
         defense_matrix: dict[str, Any] | None = None,
         baseline_attack_success_rate: float | None = None,
     ) -> SecurityReport:
-        """Build a SecurityReport from evaluation results.
-
-        Args:
-            results: Scored evaluation results from a test run.
-            defense_name: Active defense name, or None for baseline.
-            testbed_config: Agent configuration snapshot (freeform).
-
-        Returns:
-            A fully populated SecurityReport.
-        """
+        """Build a SecurityReport from evaluation results."""
         grouped: dict[str, list[EvaluationResult]] = defaultdict(list)
         findings: list[Finding] = []
         recommendations: set[str] = set()
+        probe_results: list[dict[str, Any]] = []
 
         for eval_result in results:
             grouped[eval_result.owasp_id].append(eval_result)
+            probe_results.append(_probe_result(eval_result))
             if not eval_result.success:
                 continue
 
@@ -80,11 +73,6 @@ class ReportGenerator:
             atlas_info = (
                 get_atlas_info(payload.atlas_technique) if payload.atlas_technique else None
             )
-            description_parts = [eval_result.explanation, f"OWASP: {owasp_info['name']}"]
-            if atlas_info:
-                description_parts.append(f"ATLAS: {atlas_info['name']}")
-
-            evidence = eval_result.indicators or [eval_result.attack_result.response.final_output]
             finding = Finding(
                 title=f"{payload.owasp_id} attack succeeded ({payload.id})",
                 owasp_id=payload.owasp_id,
@@ -92,8 +80,8 @@ class ReportGenerator:
                 atlas_technique=payload.atlas_technique,
                 mitre_atlas_id=payload.atlas_technique,
                 severity=payload.severity,
-                description=" | ".join(description_parts),
-                evidence=evidence[:5],
+                description=_finding_description(eval_result, owasp_info, atlas_info),
+                evidence=_finding_evidence(eval_result),
                 recommendation=_RECOMMENDATIONS_BY_SEVERITY[payload.severity],
                 owasp_mapping=OWASPMapping(
                     owasp_id=payload.owasp_id,
@@ -130,21 +118,6 @@ class ReportGenerator:
         if not recommendations:
             recommendations.add("No successful attacks detected; maintain current controls.")
 
-        probe_results = [
-            {
-                "probe_id": item.attack_result.payload.id,
-                "module": item.attack_result.payload.attack_module,
-                "owasp_id": item.attack_result.payload.owasp_id,
-                "owasp_category": get_owasp_info(item.attack_result.payload.owasp_id)["name"],
-                "passed": not item.success,
-                "success": item.success,
-                "score": item.confidence,
-                "score_method": str(item.scoring_method),
-                "response_snippet": _snippet(item.attack_result.response.final_output),
-            }
-            for item in results
-        ]
-
         delta_vs_baseline: float | None = None
         if baseline_attack_success_rate is not None:
             delta_vs_baseline = asr - baseline_attack_success_rate
@@ -167,6 +140,9 @@ class ReportGenerator:
                     }
                 )
 
+        methodology = _default_methodology()
+        methodology["negative_controls"] = _negative_control_summary(probe_results)
+
         return SecurityReport(
             report_id=f"report-{uuid4()}",
             generated_at=datetime.now(UTC),
@@ -180,15 +156,12 @@ class ReportGenerator:
             recommendations=sorted(recommendations),
             run_errors=list(run_errors or []),
             probe_results=probe_results,
-            methodology=_default_methodology(),
+            methodology=methodology,
             defense_matrix=defense_matrix,
         )
 
     def render_html(self, report: SecurityReport) -> str:
-        """Render a SecurityReport as an HTML string.
-
-        Uses the reporting template at reporting/templates/report.html.j2.
-        """
+        """Render a SecurityReport as an HTML string."""
         template = _JINJA_ENV.get_template(_TEMPLATE_NAME)
         categories = sorted(report.results_by_owasp.values(), key=lambda cat: cat.owasp_id)
         findings = sorted(
@@ -198,13 +171,17 @@ class ReportGenerator:
         severity_counts = _severity_counts(report.findings)
         matrix_rows = _matrix_rows(report)
         methodology = report.methodology or _default_methodology()
+        phase5_rows = _phase5_rows(report)
+        matrix_module_rows = _matrix_module_rows(report)
         return template.render(
             report=report,
             categories=categories,
             findings=findings,
             severity_counts=severity_counts,
             matrix_rows=matrix_rows,
+            matrix_module_rows=matrix_module_rows,
             methodology=methodology,
+            phase5_rows=phase5_rows,
         )
 
     def render_json(self, report: SecurityReport) -> str:
@@ -226,6 +203,262 @@ class ReportGenerator:
                     if isinstance(finding, dict):
                         _enrich_finding_mapping(finding)
         return json.dumps(payload, indent=2, default=str)
+
+
+def _probe_result(eval_result: EvaluationResult) -> dict[str, Any]:
+    attack_result = eval_result.attack_result
+    payload = attack_result.payload
+    response = attack_result.response
+    metadata = payload.metadata if isinstance(payload.metadata, dict) else {}
+    retrieval_trace = response.retrieval_trace or []
+    included_hits = [
+        item for item in retrieval_trace if isinstance(item, dict) and bool(item.get("included"))
+    ]
+    poisoned_included = [item for item in included_hits if bool(item.get("is_poisoned"))]
+
+    probe = {
+        "probe_id": payload.id,
+        "module": payload.attack_module,
+        "owasp_id": payload.owasp_id,
+        "owasp_category": get_owasp_info(payload.owasp_id)["name"],
+        "passed": not eval_result.success,
+        "success": eval_result.success,
+        "score": eval_result.confidence,
+        "score_method": str(eval_result.scoring_method),
+        "response_snippet": _snippet(response.final_output),
+        "attack_family": payload.attack_module,
+        "technique_tag": metadata.get("technique"),
+        "expected_signal": metadata.get("expected_signal"),
+        "is_negative_control": _is_negative_control(metadata),
+        "retrieval_trace_count": len(retrieval_trace),
+        "retrieval_included_count": len(included_hits),
+        "retrieval_poisoned_included_count": len(poisoned_included),
+        "phase5_summary": _phase5_summary(eval_result),
+    }
+
+    language = metadata.get("language")
+    if language:
+        probe["payload_language"] = language
+
+    module_name = payload.attack_module
+    if module_name == "asi_dynamic_cloak":
+        fixture = _dict(metadata.get("fixture_state"))
+        probe["cloaking_differential"] = {
+            "context_source": metadata.get("context_source"),
+            "fixture_url": fixture.get("fixture_url"),
+            "scanner_body": _snippet(str(fixture.get("scanner_body", ""))),
+            "agent_body": _snippet(str(fixture.get("agent_body", ""))),
+        }
+    elif module_name == "asi03_identity_privilege":
+        probe["identity_chain"] = {
+            "campaign_id": metadata.get("campaign_id"),
+            "turn_index": metadata.get("turn_index"),
+            "delegated_identity": metadata.get("delegated_identity"),
+        }
+    elif module_name == "asi_semantic_manip":
+        probe["manipulation_vector"] = metadata.get("technique")
+    elif module_name == "asi07_inter_agent":
+        probe["message_provenance"] = metadata.get("peer_message_meta")
+    elif module_name == "asi_hitl":
+        approval_record = _dict(_dict(metadata.get("fixture_state")).get("approval_record"))
+        probe["approval_summary_mismatch"] = {
+            "approval_summary": metadata.get("approval_summary"),
+            "actual_action": metadata.get("actual_action"),
+            "risk_delta": approval_record.get("risk_delta"),
+        }
+    elif module_name == "asi09_human_trust":
+        probe["trust_signal"] = metadata.get("trust_signal")
+
+    return probe
+
+
+def _finding_description(
+    eval_result: EvaluationResult,
+    owasp_info: dict[str, Any],
+    atlas_info: dict[str, Any] | None,
+) -> str:
+    payload = eval_result.attack_result.payload
+    parts = [eval_result.explanation, f"OWASP: {owasp_info['name']}"]
+    if atlas_info:
+        parts.append(f"ATLAS: {atlas_info['name']}")
+    phase5_summary = _phase5_summary(eval_result)
+    if phase5_summary:
+        parts.append(f"Phase 5 evidence: {phase5_summary}")
+    if payload.expected_behavior:
+        parts.append(f"Expected outcome: {payload.expected_behavior}")
+    return " | ".join(parts)
+
+
+def _finding_evidence(eval_result: EvaluationResult) -> list[str]:
+    attack_result = eval_result.attack_result
+    evidence = list(eval_result.indicators)
+    if not evidence:
+        evidence.append(_snippet(attack_result.response.final_output))
+
+    phase5_summary = _phase5_summary(eval_result)
+    if phase5_summary and phase5_summary not in evidence:
+        evidence.append(phase5_summary)
+
+    response = attack_result.response
+    if response.tool_calls:
+        tool_names = ", ".join(tool.tool_name for tool in response.tool_calls)
+        evidence.append(f"Tool calls observed: {tool_names}")
+
+    return evidence[:6]
+
+
+def _phase5_summary(eval_result: EvaluationResult) -> str:
+    payload = eval_result.attack_result.payload
+    metadata = payload.metadata if isinstance(payload.metadata, dict) else {}
+    module_name = payload.attack_module
+
+    if module_name == "asi_dynamic_cloak":
+        fixture = _dict(metadata.get("fixture_state"))
+        scanner = _snippet(str(fixture.get("scanner_body", "")), max_len=80)
+        agent = _snippet(str(fixture.get("agent_body", "")), max_len=80)
+        return f"Cloaking differential: scanner saw '{scanner}' while agent saw '{agent}'."
+
+    if module_name == "asi03_identity_privilege":
+        identity = _dict(metadata.get("delegated_identity"))
+        sender = identity.get("sender_identity", "unknown")
+        verified = identity.get("verified")
+        return f"Identity chain: sender={sender}, verified={verified}, technique={metadata.get('technique')}."
+
+    if module_name == "asi_semantic_manip":
+        return f"Manipulation vector: {metadata.get('technique', 'unknown')}"
+
+    if module_name == "llm01_crosslingual":
+        language = metadata.get("language", "unknown")
+        technique = metadata.get("technique", "unknown")
+        return f"Language: {language}; technique: {technique}"
+
+    if module_name == "asi07_inter_agent":
+        peer_meta = _dict(metadata.get("peer_message_meta"))
+        meta = _dict(peer_meta.get("metadata"))
+        return (
+            "Peer provenance: "
+            f"sender={peer_meta.get('sender_identity')}, "
+            f"session={peer_meta.get('session_id')}, "
+            f"trusted={meta.get('trusted')}, signed={meta.get('signed')}"
+        )
+
+    if module_name == "asi_hitl":
+        return (
+            "Approval summary vs actual action: "
+            f"{metadata.get('approval_summary')} -> {metadata.get('actual_action')}"
+        )
+
+    if module_name == "asi09_human_trust":
+        return (
+            "Trust-deception evidence: "
+            f"trust_signal={metadata.get('trust_signal')}, "
+            f"expected_signal={metadata.get('expected_signal')}"
+        )
+
+    if metadata.get("expected_signal"):
+        return f"Expected signal: {metadata.get('expected_signal')}"
+
+    return ""
+
+
+def _phase5_rows(report: SecurityReport) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for probe in report.probe_results:
+        if not isinstance(probe, dict):
+            continue
+        summary = str(probe.get("phase5_summary", "")).strip()
+        if not summary or not probe.get("success"):
+            continue
+        rows.append(
+            {
+                "probe_id": probe.get("probe_id"),
+                "module": probe.get("module"),
+                "technique": probe.get("technique_tag"),
+                "language": probe.get("payload_language"),
+                "summary": summary,
+            }
+        )
+    return rows
+
+
+def _dict(value: Any) -> dict[str, Any]:
+    return dict(value) if isinstance(value, dict) else {}
+
+
+def _is_negative_control(metadata: dict[str, Any]) -> bool:
+    if isinstance(metadata.get("negative_control"), bool):
+        return bool(metadata["negative_control"])
+    nested = metadata.get("rule_context")
+    if isinstance(nested, dict) and isinstance(nested.get("negative_control"), bool):
+        return bool(nested["negative_control"])
+    return False
+
+
+def _negative_control_summary(probe_results: list[dict[str, Any]]) -> dict[str, Any]:
+    total = 0
+    false_positives = 0
+    by_module: dict[str, dict[str, Any]] = {}
+
+    for probe in probe_results:
+        if not bool(probe.get("is_negative_control")):
+            continue
+        total += 1
+        module = str(probe.get("module") or "unknown")
+        item = by_module.setdefault(
+            module,
+            {"total": 0, "false_positives": 0, "false_positive_rate": 0.0},
+        )
+        item["total"] += 1
+        if bool(probe.get("success")):
+            false_positives += 1
+            item["false_positives"] += 1
+
+    for item in by_module.values():
+        item["false_positive_rate"] = (
+            item["false_positives"] / item["total"] if item["total"] else 0.0
+        )
+
+    return {
+        "total": total,
+        "false_positives": false_positives,
+        "false_positive_rate": false_positives / total if total else 0.0,
+        "by_module": by_module,
+    }
+
+
+def _matrix_module_rows(report: SecurityReport) -> list[dict[str, Any]]:
+    matrix = report.defense_matrix
+    if not isinstance(matrix, dict):
+        return []
+
+    rows: list[dict[str, Any]] = []
+    scenarios = matrix.get("scenarios")
+    if not isinstance(scenarios, dict):
+        return rows
+
+    for scenario, data in scenarios.items():
+        if not isinstance(data, dict):
+            continue
+        module_breakdown = data.get("module_breakdown")
+        if not isinstance(module_breakdown, dict):
+            continue
+        for module, stats in module_breakdown.items():
+            if not isinstance(stats, dict):
+                continue
+            rows.append(
+                {
+                    "scenario": scenario,
+                    "module": module,
+                    "total_attacks": stats.get("total_attacks"),
+                    "total_successful": stats.get("total_successful"),
+                    "attack_success_rate": stats.get("attack_success_rate"),
+                    "negative_control_false_positive_rate": stats.get(
+                        "negative_control_false_positive_rate"
+                    ),
+                }
+            )
+
+    return rows
 
 
 def _severity_rank(severity: Severity) -> int:
@@ -291,7 +524,10 @@ def _default_methodology() -> dict[str, Any]:
             "MITRE ATLAS",
             "NIST AI RMF",
         ],
-        "scoring": "Rule-based scoring by default, optional LLM judge scoring.",
+        "scoring": (
+            "Rule-based scoring by default, with optional module-aware LLM judge "
+            "prompts loaded from per-module rubrics."
+        ),
         "pass_fail": "Attack success indicates failed defense posture for that probe.",
     }
 

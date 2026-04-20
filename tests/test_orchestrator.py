@@ -19,7 +19,7 @@ from aegis.models import (
     SecurityReport,
     Severity,
 )
-from aegis.orchestrator import AEGISOrchestrator
+from aegis.orchestrator import AEGISOrchestrator, _module_breakdown, _negative_control_summary
 
 
 def test_run_baseline_returns_security_report():
@@ -275,3 +275,44 @@ def test_day7_core7_config_loads_expected_attack_set():
         "mcp06_cmd_injection",
         "llm01_prompt_inject",
     ]
+
+
+def test_matrix_module_breakdown_counts_success_and_negative_controls():
+    probes = [
+        {
+            "module": "asi_semantic_manip",
+            "success": True,
+            "is_negative_control": False,
+        },
+        {
+            "module": "asi_semantic_manip",
+            "success": False,
+            "is_negative_control": False,
+        },
+        {
+            "module": "asi_semantic_manip",
+            "success": True,
+            "is_negative_control": True,
+        },
+    ]
+
+    breakdown = _module_breakdown(probes)
+    semantic = breakdown["asi_semantic_manip"]
+    assert semantic["total_attacks"] == 3
+    assert semantic["total_successful"] == 2
+    assert semantic["attack_success_rate"] == pytest.approx(2 / 3)
+    assert semantic["negative_controls"] == 1
+    assert semantic["negative_control_false_positives"] == 1
+    assert semantic["negative_control_false_positive_rate"] == pytest.approx(1.0)
+
+
+def test_negative_control_summary_counts_false_positives():
+    summary = _negative_control_summary([
+        {"is_negative_control": True, "success": True},
+        {"is_negative_control": True, "success": False},
+        {"is_negative_control": False, "success": True},
+    ])
+
+    assert summary["total"] == 2
+    assert summary["false_positives"] == 1
+    assert summary["false_positive_rate"] == pytest.approx(0.5)

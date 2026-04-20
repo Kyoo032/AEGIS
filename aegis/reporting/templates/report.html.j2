@@ -185,6 +185,13 @@
       </p>
       <p>{{ methodology.scoring }}</p>
       <p>{{ methodology.pass_fail }}</p>
+      {% if methodology.negative_controls %}
+      <p class="meta">
+        Negative controls: {{ methodology.negative_controls.total }} total,
+        {{ methodology.negative_controls.false_positives }} false positive(s),
+        FPR {{ "{:.1%}".format(methodology.negative_controls.false_positive_rate) }}.
+      </p>
+      {% endif %}
       <p class="meta">Baseline-vs-defense comparison uses <code>delta_vs_baseline = defended_rate - baseline_rate</code>.</p>
     </section>
 
@@ -270,6 +277,65 @@
       </table>
       {% else %}
       <p>No matrix comparison data available in this report.</p>
+      {% endif %}
+      {% if matrix_module_rows %}
+      <h3>Module Breakdown</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Scenario</th>
+            <th>Module</th>
+            <th>Total</th>
+            <th>Successful</th>
+            <th>ASR</th>
+            <th>Negative-Control FPR</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in matrix_module_rows %}
+          <tr>
+            <td>{{ row.scenario }}</td>
+            <td>{{ row.module }}</td>
+            <td>{{ row.total_attacks }}</td>
+            <td>{{ row.total_successful }}</td>
+            <td>{% if row.attack_success_rate is not none %}{{ "{:.1%}".format(row.attack_success_rate) }}{% else %}n/a{% endif %}</td>
+            <td>{% if row.negative_control_false_positive_rate is not none %}{{ "{:.1%}".format(row.negative_control_false_positive_rate) }}{% else %}n/a{% endif %}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% endif %}
+    </section>
+
+
+
+    <section class="panel">
+      <h2>Phase 5 Evidence Highlights</h2>
+      {% if phase5_rows %}
+      <table>
+        <thead>
+          <tr>
+            <th>Probe</th>
+            <th>Module</th>
+            <th>Technique</th>
+            <th>Language</th>
+            <th>Evidence</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in phase5_rows %}
+          <tr>
+            <td>{{ row.probe_id }}</td>
+            <td>{{ row.module }}</td>
+            <td>{{ row.technique or "n/a" }}</td>
+            <td>{{ row.language or "n/a" }}</td>
+            <td>{{ row.summary }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <p>No module-specific Phase 5 evidence extracted for successful findings.</p>
       {% endif %}
     </section>
 

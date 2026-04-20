@@ -455,6 +455,75 @@ RELEASE GATE:
 
 ---
 
+## Phase 7 — Session Contract: Kyo Product Improvement Pass
+
+```
+You are working on AEGIS, an agent security benchmarking framework.
+Phase: 7 — Kyo Product Improvement Pass
+
+WHAT EXISTS (from Phase 6):
+- v2 module set, scoring, reports, defense matrix, and release docs are complete
+- The current repo audit passed ruff, pyright, and pytest with coverage
+- Some payloads still contain explicit Kyo improvement notes or synthetic examples
+
+IMPORTANT TIMING NOTE:
+- This contract captures the improvement snapshot as of 2026-04-16
+- Treat this as the final release-readiness pass, not as a permanent source of truth
+- Before publishing, re-audit counts and examples because product behavior, benchmark targets, attack modules, and payload totals may have changed after this snapshot
+- If newer product evidence conflicts with these notes, prefer the newer evidence and document the reason
+
+TASKS:
+1. Replace Kyo-specific placeholder payloads:
+   - datasets/payloads/asi_hitl.yaml
+     Replace synthetic approval records with real approval UI summaries/actions while preserving the risk delta being tested
+   - datasets/payloads/asi09_human_trust.yaml
+     Replace synthetic trust-deception prompts with real overconfidence, fake-citation, compliance, or user-pressure examples
+   - datasets/payloads/llm01_crosslingual.yaml
+     Replace or augment synthetic Indonesian/cross-lingual examples with real support/chat phrasing and native review
+   - datasets/payloads/asi07_inter_agent.yaml
+     Replace deterministic peer-message chains with realistic A2A/protocol envelopes from target agent frameworks
+
+2. Refresh stale release facts:
+   - README.md test count
+   - README.md module count
+   - README.md payload count
+   - README.md preferred local validation commands
+   - Any docs that repeat the same stale numbers
+
+3. Re-check scoring assumptions:
+   - Review aegis/evaluation/rule_detector.py for HITL and human-trust fallback false positives
+   - Add safe-but-not-refusal test cases where realistic agent behavior would be safe without using refusal wording
+   - Keep strict red-team scoring only where the rubric explicitly justifies it
+
+4. Improve tests only where useful:
+   - Prioritize aegis/cli.py, aegis/testbed/kb/ingest.py, and aegis/fixtures/hitl_approval.py if coverage or confidence is still weak
+   - Do not chase coverage for its own sake if the remaining paths are low-value or intentionally deferred
+
+5. Document final assumptions:
+   - State the date of the final count refresh
+   - State which examples are real product-derived vs still synthetic
+   - State any payload families intentionally left for later because newer product data is expected
+
+DO NOT:
+- Treat the current improvement list as immutable if newer product behavior is available
+- Inflate payload counts without updating tests and documentation
+- Remove negative controls while replacing synthetic examples
+- Make unrelated architecture changes
+
+GATE:
+  ruff check .
+  pytest -s --cov=aegis --cov-report=term-missing --cov-fail-under=80
+  python - <<'PY'
+  from aegis.attacks import ATTACK_MODULES, get_all_modules
+  cfg = {"mcp_servers": ["filesystem", "http", "email", "database", "code_exec"], "rag_enabled": True, "memory_enabled": True}
+  print("modules", len(ATTACK_MODULES))
+  print("payloads", sum(len(module.generate_payloads(cfg)) for module in get_all_modules()))
+  PY
+  # Docs and README match the printed counts, or explicitly explain any scoped count difference
+```
+
+---
+
 ## Resumption Template
 
 If a phase spans multiple sessions, paste this at the top of the contract:

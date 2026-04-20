@@ -51,7 +51,11 @@
       "items": { "$ref": "#/$defs/probeResult" }
     },
     "methodology": {
-      "type": ["object", "null"]
+      "type": ["object", "null"],
+      "properties": {
+        "negative_controls": { "$ref": "#/$defs/negativeControlSummary" }
+      },
+      "additionalProperties": true
     },
     "defense_matrix": {
       "type": ["object", "null"]
@@ -92,9 +96,48 @@
         "success": { "type": "boolean" },
         "score": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
         "score_method": { "type": "string" },
-        "response_snippet": { "type": "string" }
+        "response_snippet": { "type": "string" },
+        "attack_family": { "type": "string" },
+        "technique_tag": { "type": ["string", "null"] },
+        "expected_signal": { "type": ["string", "null"] },
+        "is_negative_control": { "type": "boolean" },
+        "retrieval_trace_count": { "type": "integer", "minimum": 0 },
+        "retrieval_included_count": { "type": "integer", "minimum": 0 },
+        "retrieval_poisoned_included_count": { "type": "integer", "minimum": 0 },
+        "phase5_summary": { "type": "string" },
+        "payload_language": { "type": "string" },
+        "cloaking_differential": { "type": "object" },
+        "identity_chain": { "type": "object" },
+        "manipulation_vector": { "type": ["string", "null"] },
+        "message_provenance": { "type": ["object", "null"] },
+        "approval_summary_mismatch": { "type": "object" },
+        "trust_signal": { "type": ["string", "null"] }
       },
       "additionalProperties": true
+    },
+    "negativeControlSummary": {
+      "type": "object",
+      "required": ["total", "false_positives", "false_positive_rate"],
+      "properties": {
+        "total": { "type": "integer", "minimum": 0 },
+        "false_positives": { "type": "integer", "minimum": 0 },
+        "false_positive_rate": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+        "by_module": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/moduleNegativeControlSummary" }
+        }
+      },
+      "additionalProperties": true
+    },
+    "moduleNegativeControlSummary": {
+      "type": "object",
+      "required": ["total", "false_positives", "false_positive_rate"],
+      "properties": {
+        "total": { "type": "integer", "minimum": 0 },
+        "false_positives": { "type": "integer", "minimum": 0 },
+        "false_positive_rate": { "type": "number", "minimum": 0.0, "maximum": 1.0 }
+      },
+      "additionalProperties": false
     },
     "owaspMapping": {
       "type": "object",
