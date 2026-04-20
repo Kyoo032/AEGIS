@@ -153,9 +153,9 @@ aegis attack --module asi_semantic_manip
 
 ## Phase 3: Cross-Lingual + Trust Boundary Modules
 
-> **Status:** Completed 2026-04-16; audited 2026-04-20 with pre-Phase-5 cleanup required.
+> **Status:** Completed 2026-04-16; audited 2026-04-20, metadata cleanup completed 2026-04-20.
 > **Goal:** Ship the cross-lingual and inter-agent modules. Crosslingual dataset curation from Phase 1 parallel track lands here.
-> **Gate:** Partially passed — both Phase 3 modules exist and emit reports, but the 2026-04-20 audit found dataset gate debt: payload YAMLs do not expose top-level `technique_tag` / `is_negative_control`, and smoke runs showed scorer disagreement / judge reliability issues that belong in Phase 5a calibration.
+> **Gate:** Partially passed — both Phase 3 modules exist, emit reports, and pass the normalized payload metadata coverage gate. Remaining pre-Phase-5 debt: `llm01_crosslingual` still needs the Indonesian naturalness pass, and scorer disagreement remains Phase 5a calibration work.
 
 | Module | Key Techniques | Coverage Gate | Scoring Signals |
 |--------|----------------|---------------|-----------------|
@@ -172,9 +172,9 @@ aegis attack --module asi07_inter_agent
 
 ## Phase 4: HITL + Human Trust Modules
 
-> **Status:** In Progress as of audit 2026-04-20; modules exist, but gate cleanup remains.
+> **Status:** Completed 2026-04-16; audited and cleanup-verified 2026-04-20.
 > **Goal:** Complete the v2 module set.
-> **Gate:** Partially passed — `asi_hitl` and `asi09_human_trust` exist and emit reports, but the 2026-04-20 audit found dataset gate debt: payload YAMLs do not expose top-level `technique_tag` / `is_negative_control`; `asi_hitl` smoke run also showed LLM judge parse failures that belong in Phase 5a calibration.
+> **Gate:** Passed for module existence, metadata coverage, and smoke execution. Remaining scorer disagreements are Phase 5a calibration work, not Phase 4 module-shipping blockers.
 
 | Module | Key Techniques | Coverage Gate | Scoring Signals |
 |--------|----------------|---------------|-----------------|
@@ -194,7 +194,13 @@ aegis attack --module asi09_human_trust
 
 > **Status:** In Progress as of audit 2026-04-20.
 > **Goal:** Make v2 findings auditable for publication and comparison against v1.
-> **Audit note:** Phase 5a is required before matrix publication: rubric finalization is `7/7` incomplete by calibration/concordance criteria, top-level dataset metadata gates fail for the four audited modules, `--dry-run` is not implemented, and module smoke runs surfaced scorer disagreement / judge parse issues.
+> **Audit note:** Phase 5a is required before matrix publication: rubric finalization is `7/7` incomplete by calibration/concordance criteria, and module smoke runs still surface scorer disagreement.
+>
+> ### Pre-Phase-5 Cleanup Required (audited 2026-04-20)
+> - [x] Payload metadata normalization: top-level `technique_tag`, `is_negative_control`, `attack_family`, and `version` added for the four audited v2 datasets.
+> - [x] Judge parser / prompt fix: Ollama judge now requests a structured JSON schema; `asi07_inter_agent`, `asi_hitl`, `asi09_human_trust`, and `llm01_crosslingual` smoke runs no longer show unparseable judge output.
+> - [ ] Indonesian naturalness pass for `llm01_crosslingual` (26 payloads still marked `native_reviewer: false`).
+> - [ ] Phase 5a rubric calibration for all 7 modules (all rubrics still need documented threshold/concordance/structured rationale).
 
 | Area | Tasks | Done When |
 |------|-------|-----------|

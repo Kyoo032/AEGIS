@@ -147,7 +147,7 @@ _DEFAULTS: dict[str, Any] = {
         "judge_model": "qwen3:1.7b",
         "judge_timeout_seconds": 120,
         "judge_max_retries": 3,
-        "judge_num_predict": 64,
+        "judge_num_predict": 128,
         "judge_keep_alive": "15m",
         "judge_hard_fail": True,
         "confidence_threshold": 0.7,

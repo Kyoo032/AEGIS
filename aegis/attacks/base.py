@@ -27,6 +27,12 @@ _TOOL_ALIASES: dict[str, str] = {
     "db": "database",
     "database": "database",
 }
+_EXPORT_METADATA_KEYS = {
+    "technique_tag": "technique",
+    "is_negative_control": "negative_control",
+    "attack_family": "attack_family",
+    "version": "version",
+}
 
 
 class BaseAttackModule(AttackModule):
@@ -202,7 +208,7 @@ class BaseAttackModule(AttackModule):
                 msg = f"Payload at index {idx} must be a mapping, got {type(entry).__name__}"
                 raise ValueError(msg)
 
-            merged = {**module_defaults, **entry}
+            merged = _merge_export_metadata({**module_defaults, **entry})
             if "messages" not in merged and "prompt" in merged:
                 merged["messages"] = [
                     {"role": "user", "content": str(merged["prompt"])},
@@ -226,6 +232,7 @@ class BaseAttackModule(AttackModule):
                 raise ValueError(msg) from exc
 
         return payloads
+
 
     def _filter_payloads(
         self,
@@ -284,3 +291,14 @@ class BaseAttackModule(AttackModule):
 
         agent.inject_context(context, method=method)
         return payload.model_copy(update={"injected_context": None})
+
+def _merge_export_metadata(merged: dict[str, Any]) -> dict[str, Any]:
+    """Move dataset-export fields into runtime metadata before Pydantic validation."""
+    metadata = dict(merged.get("metadata") or {})
+    for export_key, metadata_key in _EXPORT_METADATA_KEYS.items():
+        if export_key not in merged:
+            continue
+        value = merged.pop(export_key)
+        metadata.setdefault(metadata_key, value)
+    merged["metadata"] = metadata
+    return merged
