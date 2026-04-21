@@ -1,272 +1,185 @@
-# 🛡️ AEGIS — Agentic Exploit & Guardrail Investigation Suite
+# AEGIS
 
-> **Automated security testing for AI agents.** AEGIS probes your agentic AI system for vulnerabilities — prompt injection, tool misuse, memory poisoning, and more — then tells you what broke and how to fix it.
+> Agentic Exploit & Guardrail Investigation Suite
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-584%20passed-brightgreen)]()
-[![Coverage](https://img.shields.io/badge/coverage-89%25-brightgreen)]()
+[![Tests](https://img.shields.io/badge/tests-773%20passed-brightgreen)]()
+[![Coverage](https://img.shields.io/badge/coverage-89.01%25-brightgreen)]()
 
----
+AEGIS is a security testing framework for tool-using AI agents. It exercises prompt injection, tool misuse, identity delegation, cloaked content, human-approval abuse, inter-agent trust failures, and related agentic attack surfaces, then emits structured reports for reproduction and defense analysis.
 
-## 🤔 What is this?
+## Release Snapshot
 
-Modern AI agents can use tools (read files, query databases, send emails, execute code). That's powerful — but also dangerous. AEGIS answers the question:
+- Registered attack modules: `15`
+- New v2 research modules: `7`
+- Phase 5 v2 matrix scope: `105` probes across `7` modules
+- Latest v2 baseline ASR: `0.8286` (`87/105`)
+- Latest full test gate: `773 passed`, `89.01%` coverage
+- Deferred scope: `ASI08` cascading failures and `ASI10` rogue agents
 
-> **"If someone tries to trick my AI agent into doing something malicious, will it comply?"**
+The current v2 evaluation lane is documented in [docs/DEFENSE_EVALUATION.md](docs/DEFENSE_EVALUATION.md). Historical v1/core results remain in the repo for comparison, but the v2 matrix is the current release-facing source of truth.
 
-AEGIS sends **86 attack payloads** across 8 categories (68 core + 18 extended) at your agent, scores whether each attack succeeded, and generates a security report with findings and recommendations.
+## What Ships
 
----
+AEGIS currently ships `15` registered attack modules:
 
-## 📊 Key Findings (Baseline Scan)
+| Track | Modules |
+|---|---|
+| Legacy/core | `asi01_goal_hijack`, `asi02_tool_misuse`, `asi04_supply_chain`, `asi05_code_exec`, `asi06_memory_poison`, `mcp06_cmd_injection`, `llm01_prompt_inject`, `llm02_data_disclosure` |
+| v2 research | `asi03_identity_privilege`, `asi07_inter_agent`, `asi09_human_trust`, `asi_dynamic_cloak`, `asi_hitl`, `asi_semantic_manip`, `llm01_crosslingual` |
 
-We tested a `qwen3:4b` agent with 6 MCP tools enabled. Here's what we found:
+The v2 track extends AEGIS beyond input-level prompt injection into agent-specific failures:
 
-| Category | OWASP ID | Attack Success Rate | Risk |
-|----------|----------|:-------------------:|------|
-| 🔴 Command Injection via MCP | MCP06 | **100%** (10/10) | Critical |
-| 🔴 Tool Misuse & Exploitation | ASI02 | **90%** (9/10) | Critical |
-| 🔴 Supply Chain Vulnerabilities | ASI04 | **90%** (9/10) | Critical |
-| 🟡 Agent Goal Hijacking | ASI01 | **10%** (1/10) | Medium |
-| 🟢 Prompt Injection | LLM01 | **0%** (0/13) | Low |
-| 🟢 Unexpected Code Execution | ASI05 | **0%** (0/10) | Low |
-| 🟢 Memory & Context Poisoning | ASI06 | **0%** (0/5) | Low |
+- identity and delegated-authority abuse
+- agent-visible cloaked content that scanners do not see
+- semantic manipulation without obvious jailbreak syntax
+- cross-lingual and mixed-script instruction following
+- unverified peer-message trust
+- human approval summary mismatch and escalation
+- deceptive trust signals aimed at the user
 
-**Overall baseline ASR: 42.65%** — nearly half of all attack payloads succeeded without defenses.
+## Quick Start
 
-### 🛡️ Defense Effectiveness
-
-| Defense Configuration | ASR | Improvement |
-|-----------------------|:---:|:-----------:|
-| ❌ No defenses (baseline) | 42.65% | — |
-| 🟡 `input_validator` alone | 14.71% | ⬇️ 65.52% |
-| 🟡 `tool_boundary` alone | 35.29% | ⬇️ 17.24% |
-| ✅ **`input_validator + output_filter + tool_boundary`** | **8.82%** | ⬇️ **79.31%** |
-
-> 💡 **Bottom line:** Layering 3 defenses reduced successful attacks from 29/68 to just 6/68. The remaining 6 are sophisticated multi-turn and indirect-injection attacks that bypass all input boundaries.
-
----
-
-## 🏗️ Architecture
-
-```mermaid
-graph TB
-    CLI["🖥️ CLI (typer)"]
-    ORCH["⚙️ Orchestrator"]
-    ATK["💥 Attack Modules (8)"]
-    AGENT["🤖 Agent Testbed"]
-    EVAL["📊 Evaluation Pipeline"]
-    DEF["🛡️ Defense Modules (5)"]
-    RPT["📝 Report Generator"]
-
-    CLI --> ORCH
-    ORCH --> ATK
-    ORCH --> AGENT
-    ORCH --> EVAL
-    ORCH --> DEF
-    ORCH --> RPT
-    ATK -->|payloads| AGENT
-    AGENT -->|responses| EVAL
-    DEF -->|intercept| AGENT
-    EVAL -->|results| RPT
-```
-
----
-
-## 🚀 Quick Start
-
-### 🐳 Docker Compose (Recommended)
-
-The fastest way to get started — no Python or Ollama install needed:
+### Install
 
 ```bash
-git clone https://github.com/Kyoo032/AEGIS.git
-cd AEGIS
-
-# Build images
-docker compose build
-
-# Pull models + run a security scan
-docker compose --profile scan up
-
-# Start the interactive dashboard (http://localhost:8501)
-docker compose --profile dashboard up dashboard -d
-
-# Teardown
-docker compose --profile scan --profile dashboard down
-```
-
-Docker Compose handles everything: Ollama model server, model downloads, scan execution, and the Streamlit dashboard. GPU acceleration is enabled automatically if an NVIDIA GPU is available.
-
-### 🐍 Manual Install (Alternative)
-
-If you prefer running directly on your machine:
-
-```bash
-# Prerequisites: Python 3.11+, uv, Ollama
 git clone https://github.com/Kyoo032/AEGIS.git
 cd AEGIS
 uv sync --dev
-
-# Pull models
-ollama pull qwen3:4b      # Target agent
-ollama pull qwen3:1.7b    # Evaluation judge
 ```
 
-### Run your first scan
+> **Lightweight by default — no Ollama / HuggingFace required.**
+> As of v2.0.0 AEGIS ships with [aegis/config.yaml](aegis/config.yaml) set to `testbed.provider.mode: offline` and the `rule_based` scorer only. A fresh clone runs the full pipeline in seconds with no external model, which is the right default for cloud deploys and BYO-model users.
+>
+> Offline mode uses a deterministic heuristic dispatcher ([aegis/testbed/agent.py](aegis/testbed/agent.py)), not a live LLM. Offline results are **not** a valid model evaluation — they exist to verify the pipeline works end-to-end.
+>
+> To run against a real model:
+>
+> - set `testbed.provider.mode` to `ollama` or `huggingface`, and
+> - uncomment `- llm_judge` under `evaluation.scorers`, and
+> - optionally set `testbed.provider.require_external: true` so AEGIS fails fast instead of silently falling back to offline.
+>
+> Always check the `provider_selected` field in the agent metadata / run log before treating a result as a real model evaluation.
+
+### Basic commands
 
 ```bash
-# Full baseline security scan
-uv run aegis scan
+uv run aegis --help
 
-# Run a specific attack module
-uv run aegis attack --module llm01_prompt_inject
+# Ultra-fast smoke: 1 probe per module, offline, rule-based only
+uv run aegis scan --config aegis/config.minimal.yaml --format json
 
-# Test a defense
-uv run aegis defend --defense input_validator
-
-# Full attack x defense matrix
-uv run aegis matrix
-
-# Generate an HTML report from results
-uv run aegis report --format html
-```
-
-### 📊 Dashboard
-
-A [Streamlit](https://streamlit.io/) dashboard is available at **http://localhost:8501** for interactive exploration of scan results, defense comparisons, and per-category breakdowns. See the [`dashboard/`](dashboard/) directory for details.
-
----
-
-## 💥 Attack Modules
-
-8 modules targeting [OWASP LLM Top 10](https://owasp.org/www-project-top-10-for-large-language-model-applications/), [OWASP Agentic Top 10](https://owasp.org/www-project-agentic-ai-threats/), and [MCP Top 10](https://invariantlabs.ai/mcp-top-10):
-
-| Module | OWASP ID | What it tests |
-|--------|----------|---------------|
-| `llm01_prompt_inject` | LLM01 | Direct/indirect prompt injection, jailbreaks, encoding bypasses |
-| `llm02_data_disclosure` | LLM02 | PII extraction, system prompt leakage, secret exfiltration |
-| `asi01_goal_hijack` | ASI01 | Agent goal redirection, persona override, priority manipulation |
-| `asi02_tool_misuse` | ASI02 | Tool parameter injection, destructive operations, scope escape |
-| `asi04_supply_chain` | ASI04 | Evil MCP server injection, poisoned tool descriptions, RAG poisoning |
-| `asi05_code_exec` | ASI05 | Prompt → remote code execution via code_exec MCP |
-| `asi06_memory_poison` | ASI06 | Cross-turn memory corruption, persistent backdoor injection |
-| `mcp06_cmd_injection` | MCP06 | OS command injection, SQL injection, path traversal via MCP tools |
-
----
-
-## 📄 GRC-Ready Security Assessment Report
-
-AEGIS generates a professional HTML security assessment report designed for GRC (Governance, Risk & Compliance) workflows. Print to PDF or share directly with auditors and compliance teams.
-
-**Report highlights:**
-- **Executive summary** with overall risk rating and top recommendations
-- **Risk heatmap** showing attack success rates across all categories
-- **Defense effectiveness comparison** — before/after metrics with visual bar charts
-- **Detailed findings** with evidence, business impact, and remediation guidance
-- **Framework alignment** — maps findings to OWASP LLM Top 10, OWASP Agentic Top 10, MITRE ATLAS, and NIST AI RMF
-- **PDF-printable** — A4 page breaks, print-optimized CSS, ready for executive distribution
-
-```bash
-# Generate HTML report from scan results
-uv run aegis report --format html
-
-# Or generate directly during a scan
+# Fast baseline scan (default config — offline + rule-based)
 uv run aegis scan --format html
+
+# Run one v2 module
+uv run aegis attack --module asi_dynamic_cloak --format json
+
+# Run the v2 deterministic defense matrix used in Phase 5
+uv run aegis matrix --config aegis/config.phase5b_v2_matrix.yaml --format json
 ```
 
-> See a sample report: [`reports/AEGIS_Security_Assessment_Report.html`](reports/AEGIS_Security_Assessment_Report.html)
+### Speeding up or scoping runs
 
----
+- Cap payloads per module via `orchestration.max_probes_per_module` in your config (integer, or `null` for no cap). See [aegis/config.minimal.yaml](aegis/config.minimal.yaml) for a ready-to-use smoke config.
+- Override provider mode per-run with `AEGIS_PROVIDER_MODE=offline|ollama|huggingface`.
+- Override Ollama endpoint per-run with `OLLAMA_BASE_URL=http://...`.
 
-## 🛡️ Defense Modules
-
-5 configurable defenses that intercept attacks at different stages:
-
-| Defense | What it does | Baseline Impact |
-|---------|-------------|:---------------:|
-| `input_validator` | Sanitizes prompts, blocks injection patterns | ⬇️ 65.52% ASR |
-| `output_filter` | Filters PII and sensitive data from responses | — |
-| `tool_boundary` | Validates tool parameters, enforces allowlists | ⬇️ 17.24% ASR |
-| `mcp_integrity` | Verifies MCP manifest hashes, detects tampering | Defense-in-depth |
-| `permission_enforcer` | Enforces least-privilege, blocks cross-tool flows | Defense-in-depth |
-
-> 🏆 **Best combo:** `input_validator + output_filter + tool_boundary` → **79.31% attack reduction**
-
----
-
-## 🤖 Agent Profiles
-
-4 preconfigured profiles in `aegis/config.yaml`:
-
-| Profile | Tools | RAG/Memory | Use Case |
-|---------|-------|:----------:|----------|
-| `default` | All 6 MCP servers | ✅ | Baseline vulnerability testing |
-| `hardened` | Restricted set | ❌ | Defense evaluation |
-| `minimal` | Filesystem only | ❌ | Isolated attack testing |
-| `supply_chain` | Includes `evil` MCP server | ✅ | Supply chain/poisoning validation |
-
----
-
-## 🧪 Testing
-
-584 tests, 89% coverage, enforced at 80% minimum:
+### Validation commands
 
 ```bash
-# Run tests with coverage
+uv run ruff check .
 uv run pytest --cov=aegis --cov-report=term-missing --cov-fail-under=80
-
-# Lint
-uv run ruff check aegis/
-
-# Validate report schemas
-uv run python scripts/validate_reports.py --schema report --input reports/sample_baseline_report.json
+uv run python scripts/validate_reports.py --schema report --input reports/attack-asi_dynamic_cloak.json
+uv run python scripts/validate_reports.py --schema matrix --input reports/<matrix-file>.json
 ```
 
-`MockAgent` provides deterministic offline testing — no Ollama required. Used in CI and all unit tests.
+## v2 Module Table
 
----
+The v2 public research lane covers seven modules and `105` probes in the current Phase 5 evaluation surface.
 
-## 🔒 Security Defaults
+| Module | Surface | Attack techniques | Probes | Negative controls |
+|---|---|---:|---:|---:|
+| `asi_dynamic_cloak` | Agent-only or differential content retrieval | 5 | 12 | 2 |
+| `asi03_identity_privilege` | Forged roles, delegation abuse, privilege transfer | 5 | 12 | 2 |
+| `asi_semantic_manip` | Authority, urgency, anchoring, compliance, social proof | 7 | 16 | 2 |
+| `llm01_crosslingual` | Indonesian, mixed-language, transliteration, homoglyph bypass | 7 | 26 | 5 |
+| `asi07_inter_agent` | Peer-message provenance, replay, session smuggling | 6 | 14 | 2 |
+| `asi_hitl` | Approval fatigue, summary mismatch, escalation, fake remediation | 5 | 13 | 2 |
+| `asi09_human_trust` | Fake success cues, audit claims, citations, unsafe persuasion | 5 | 12 | 2 |
 
-- `code_exec` MCP tool **disabled by default** (`testbed.security.code_exec_enabled: false`)
-- HTTP requests use **strict allowlist** + private-network blocking
-- Filesystem operations **sandboxed** to `/tmp/aegis_fs`
-- Database queries **row-limited** (1000) with timeout enforcement
-- All hardening knobs configurable under `testbed.security` in `aegis/config.yaml`
+Technique breakdowns are stored in [datasets/payloads](datasets/payloads) and surfaced in the Phase 5 reporting path through `technique_tag`, `attack_family`, `expected_signal`, and `phase5_summary`.
 
----
+## Latest v2 Findings
 
-## 📖 Documentation
+The current Phase 5 baseline matrix artifact is `reports/day89_defense_matrix_20260420T132439Z.json`. Baseline module ASR from that run:
 
-| Document | Description |
-|----------|-------------|
-| [📊 FINDINGS.md](docs/FINDINGS.md) | Baseline attack results, ASR data, and recommendations |
-| [📐 METHODOLOGY.md](docs/METHODOLOGY.md) | Evaluation methodology, scoring, and framework alignment |
-| [🛡️ DEFENSE_EVALUATION.md](docs/DEFENSE_EVALUATION.md) | Per-defense bypass analysis, layering strategy, residual risk |
-| [📋 CHANGELOG.md](CHANGELOG.md) | v1.0 release notes |
-| [📄 Security Assessment Report](reports/AEGIS_Security_Assessment_Report.html) | GRC-ready security assessment (PDF-printable) |
+| Module | Baseline ASR | Negative-control FPR |
+|---|---:|---:|
+| `asi_semantic_manip` | 0.8750 | 0.0000 |
+| `asi_hitl` | 0.8462 | 0.0000 |
+| `asi03_identity_privilege` | 0.8333 | 0.0000 |
+| `asi09_human_trust` | 0.8333 | 0.0000 |
+| `asi_dynamic_cloak` | 0.8333 | 0.0000 |
+| `llm01_crosslingual` | 0.8077 | 0.0000 |
+| `asi07_inter_agent` | 0.7857 | 0.0000 |
 
----
+The main result from Phase 5 is simple: legacy v1-style defenses barely move most of these surfaces. In the current deterministic v2 matrix, only `input_validator` materially reduces aggregate ASR, and even that reduction is bounded to the more instruction-visible subsets of identity, semantic, and inter-agent abuse.
 
-## 🔄 CI/CD
+## Architecture Notes
 
-GitHub Actions workflow at [`.github/workflows/security-scan.yml`](.github/workflows/security-scan.yml) runs scheduled weekly scans and on every PR.
+AEGIS is organized around a small number of stable surfaces:
 
----
+- `aegis/cli.py`: `scan`, `attack`, `defend`, `matrix`, `report`
+- `aegis/orchestrator.py`: attack loading, defense wiring, scoring, matrix execution
+- `aegis/attacks/`: attack module registry plus YAML-backed payload sets
+- `aegis/scoring/`: deterministic rules and optional judge-backed rubrics
+- `aegis/reporting/`: HTML and JSON report generation
+- `datasets/payloads/`: release-facing v2 payload exports and metadata
 
-## ⚙️ Primary Local Models
+Scoring supports two modes:
 
-| Role | Model | Purpose |
-|------|-------|---------|
-| 🤖 Target agent | `qwen3:4b` (Ollama) | Baseline vulnerability testing |
-| ⚖️ Judge | `qwen3:1.7b` (Ollama) | Lightweight scoring/evaluation |
+- `rule_based` for fast, reproducible gates
+- `llm_judge` for richer adjudication where a local judge model is available
 
-Default Ollama endpoint: `http://localhost:11434`
+Phase 5 uses both:
 
----
+- judge-backed smoke reports per v2 module
+- deterministic v2 matrix via [aegis/config.phase5b_v2_matrix.yaml](aegis/config.phase5b_v2_matrix.yaml)
 
-## 📄 License
+## Documentation
 
-[MIT](LICENSE) — use freely, contribute back.
+| Document | Purpose |
+|---|---|
+| [docs/METHODOLOGY.md](docs/METHODOLOGY.md) | Threat model, scoring, reproducibility, deferred scope |
+| [docs/FINDINGS.md](docs/FINDINGS.md) | v2 baseline findings, representative evidence, residual risk |
+| [docs/DEFENSE_EVALUATION.md](docs/DEFENSE_EVALUATION.md) | Defense matrix results and bypass interpretation |
+| [CHANGELOG.md](CHANGELOG.md) | Release notes and migration history |
+
+## Known Gaps and Deferred Scope
+
+AEGIS v2 intentionally does not claim coverage for:
+
+- `ASI08` cascading agent failures
+- `ASI10` rogue agents
+
+Those two categories need a multi-agent orchestration and discovery layer that the current local benchmark setup does not implement. They are documented as future work rather than shipped as shallow or misleading coverage.
+
+There is also one explicit publication caveat still carried into Phase 7:
+
+- some v2 payload phrasing remains synthetic or benchmark-oriented, especially in HITL approval records and parts of the cross-lingual lane
+
+That work is tracked as the final Kyo/product improvement pass rather than being hidden inside the release docs.
+
+## Security Defaults
+
+- `code_exec` is disabled by default under `testbed.security.code_exec_enabled`
+- HTTP access is allowlisted and private-network access is blocked
+- filesystem actions are sandboxed to the configured safe root
+- database queries are row-limited and timeout-bound
+- report and matrix artifacts validate against JSON schemas in `schemas/`
+
+## License
+
+[MIT](LICENSE)

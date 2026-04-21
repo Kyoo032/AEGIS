@@ -1,0 +1,71 @@
+# AEGIS Minimal / Smoke Configuration
+#
+# Intended use:
+#   - fast local smoke runs (seconds, not minutes)
+#   - cloud deploys where users bring their own model and just want to confirm
+#     the pipeline imports, routes, and reports work end-to-end
+#   - CI sanity gate on top of the normal test suite
+#
+# What this config does differently from config.yaml:
+#   - forces offline provider (no Ollama / HuggingFace dependency)
+#   - rule-based scorer only (no judge model HTTP calls)
+#   - caps payloads to 1 per module (orchestration.max_probes_per_module)
+#   - restricts attacks to one representative v1 + v2 module
+#
+# Run:
+#   uv run aegis scan --config aegis/config.minimal.yaml --format json
+
+testbed:
+  model: "qwen3:4b"
+  fallback_model: "qwen3:1.7b"
+  context_length: 4096
+  model_provider: "ollama"
+  provider:
+    mode: "offline"
+    ollama_base_url: "http://localhost:11434"
+    ollama_health_timeout_seconds: 1
+    ollama_generate_timeout_seconds: 5
+    ollama_num_predict: 64
+    ollama_keep_alive: "5m"
+    hf_model: "HuggingFaceH4/zephyr-7b-beta"
+    hf_token_env: "HF_TOKEN"
+    require_external: false
+  agent_profile: "minimal"
+  llm_timeout_seconds: 5
+  llm_max_retries: 0
+  llm_retry_base_delay_seconds: 0.1
+  llm_retry_max_delay_seconds: 0.5
+  llm_retry_jitter_seconds: 0.0
+  mcp_servers: [filesystem]
+  rag_enabled: false
+  memory_enabled: false
+
+orchestration:
+  max_probes_per_module: 1
+
+attacks:
+  modules:
+    - llm01_prompt_inject
+    - asi_dynamic_cloak
+  payloads_per_module: 1
+  multi_turn: false
+
+evaluation:
+  scorers:
+    - rule_based
+  confidence_threshold: 0.7
+
+defenses:
+  active: []
+  available:
+    - input_validator
+    - output_filter
+    - tool_boundary
+    - mcp_integrity
+    - permission_enforcer
+  layered_combinations: []
+
+reporting:
+  formats: ["json"]
+  output_dir: "./reports"
+  include_atlas_mapping: true

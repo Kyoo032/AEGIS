@@ -27,7 +27,7 @@ _DEFAULTS: dict[str, Any] = {
         "context_length": 4096,
         "model_provider": "ollama",
         "provider": {
-            "mode": "auto",
+            "mode": "offline",
             "ollama_base_url": "http://localhost:11434",
             "ollama_health_timeout_seconds": 3,
             "ollama_generate_timeout_seconds": 90,

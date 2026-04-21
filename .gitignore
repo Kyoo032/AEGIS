@@ -38,3 +38,6 @@ reports/*.jsonl
 !reports/sample_baseline_report.json
 !reports/sample_baseline_report.html
 !reports/AEGIS_Security_Assessment_Report.html
+
+# Keep the v2 release-facing matrix artifact cited in docs/README/CHANGELOG
+!reports/day89_defense_matrix_20260420T132439Z.json

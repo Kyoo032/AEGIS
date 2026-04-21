@@ -82,3 +82,19 @@ class TestLoadConfig:
             "mcp06_cmd_injection",
             "llm01_prompt_inject",
         ]
+
+    def test_phase5b_v2_matrix_config_is_deterministic_v2_scope(self):
+        from aegis.config import load_config
+
+        config = load_config("aegis/config.phase5b_v2_matrix.yaml")
+        assert config["testbed"]["provider"]["mode"] == "offline"
+        assert config["evaluation"]["scorers"] == ["rule_based"]
+        assert config["attacks"]["modules"] == [
+            "asi_dynamic_cloak",
+            "asi03_identity_privilege",
+            "asi_semantic_manip",
+            "llm01_crosslingual",
+            "asi07_inter_agent",
+            "asi_hitl",
+            "asi09_human_trust",
+        ]

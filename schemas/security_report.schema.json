@@ -30,7 +30,7 @@
     "results_by_owasp": {
       "type": "object",
       "patternProperties": {
-        "^[A-Z0-9]+$": { "$ref": "#/$defs/owaspCategoryResult" }
+        "^[A-Z0-9-]+$": { "$ref": "#/$defs/owaspCategoryResult" }
       },
       "additionalProperties": false
     },

@@ -109,6 +109,28 @@ def test_report_schema_accepts_phase5_payload_fields(tmp_path: Path):
     assert exit_code == 0
 
 
+def test_report_schema_accepts_hyphenated_v2_owasp_ids(tmp_path: Path):
+    report = ReportGenerator().generate([
+        _make_phase5_eval_result(
+            attack_module="asi_dynamic_cloak",
+            owasp_id="ASI-DYNAMIC-CLOAK",
+            category="Dynamic Cloaking",
+            metadata={
+                "technique": "agent_fingerprinting",
+                "expected_signal": "trap_content_retrieved",
+                "fixture_state": {
+                    "scanner_body": "Public changelog.",
+                    "agent_body": "AEGIS_TRAP_CONTENT",
+                },
+            },
+        )
+    ])
+    payload = json.loads(ReportGenerator().render_json(report))
+    report_file = _write_json(tmp_path / "hyphenated-v2-report.json", payload)
+    exit_code = validate_files("report", [str(report_file)])
+    assert exit_code == 0
+
+
 def test_report_schema_rejects_missing_owasp_mapping(tmp_path: Path):
     bad = _valid_report_payload()
     bad["findings"][0].pop("owasp_mapping", None)

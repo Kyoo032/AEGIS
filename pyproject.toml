@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "aegis"
-version = "1.0.0"
+version = "2.0.0"
 description = "Agentic Exploit & Guardrail Investigation Suite — security testing framework for agentic AI systems"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -51,7 +51,7 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
-addopts = "--tb=short -q -p no:deepeval --ignore=tests/test_orchestrator.py"
+addopts = "--tb=short -q -p no:deepeval"
 
 [tool.ruff]
 line-length = 100

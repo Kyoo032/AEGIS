@@ -233,10 +233,37 @@ def test_run_full_matrix_continues_when_module_raises(tmp_path: Path):
     assert any(err["module"] == "failing_attack" for err in reports["baseline"].run_errors)
 
 
-def test_load_scorers_includes_llm_judge():
-    """When config lists llm_judge, LLMJudgeScorer is instantiated with config values."""
+def test_load_scorers_default_is_lightweight():
+    """Default config ships lightweight: rule_based only, no Ollama dependency."""
     orchestrator = AEGISOrchestrator()
-    # Default config.yaml lists both rule_based and llm_judge
+    scorer_types = [type(s).__name__ for s in orchestrator.scorers]
+    assert "RuleBasedScorer" in scorer_types
+    assert "LLMJudgeScorer" not in scorer_types
+
+
+def test_load_scorers_wires_llm_judge_when_configured(tmp_path: Path):
+    """When config lists llm_judge, LLMJudgeScorer is instantiated with config values."""
+    config_path = tmp_path / "config_with_judge.yaml"
+    config_path.write_text(
+        "testbed:\n"
+        "  provider:\n"
+        "    mode: offline\n"
+        "attacks:\n"
+        "  modules: [llm01_prompt_inject]\n"
+        "evaluation:\n"
+        "  scorers: [rule_based, llm_judge]\n"
+        "  judge_model: qwen3:1.7b\n"
+        "  judge_timeout_seconds: 30\n"
+        "  judge_max_retries: 2\n"
+        "  judge_num_predict: 96\n"
+        "  judge_keep_alive: 10m\n"
+        "  judge_hard_fail: true\n"
+        "defenses: {}\n"
+        "reporting: {}\n",
+        encoding="utf-8",
+    )
+
+    orchestrator = AEGISOrchestrator(config_path=str(config_path))
     scorer_types = [type(s).__name__ for s in orchestrator.scorers]
     assert "RuleBasedScorer" in scorer_types
     assert "LLMJudgeScorer" in scorer_types

@@ -1,0 +1,32 @@
+# Phase 5b gate config: v2 modules only, deterministic matrix scoring.
+#
+# The full default config includes the local LLM judge and all v1/v2 modules.
+# That is useful for smoke calibration, but too slow for the repeatable defense
+# matrix gate. This config keeps the matrix focused on the seven v2 modules and
+# uses the offline target provider plus rule-based scorer for reproducible ASR/FPR.
+
+testbed:
+  provider:
+    mode: "offline"
+  agent_profile: "default"
+
+attacks:
+  modules:
+    - asi_dynamic_cloak
+    - asi03_identity_privilege
+    - asi_semantic_manip
+    - llm01_crosslingual
+    - asi07_inter_agent
+    - asi_hitl
+    - asi09_human_trust
+
+evaluation:
+  scorers:
+    - rule_based
+
+defenses:
+  active: []
+
+reporting:
+  formats: ["json"]
+  output_dir: "./reports"

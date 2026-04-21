@@ -14,6 +14,9 @@ from typing import Any
 import yaml
 
 MODULES = (
+    "asi_dynamic_cloak",
+    "asi03_identity_privilege",
+    "asi_semantic_manip",
     "llm01_crosslingual",
     "asi07_inter_agent",
     "asi_hitl",

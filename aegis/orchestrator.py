@@ -192,6 +192,7 @@ class AEGISOrchestrator:
 
         errors: list[dict[str, Any]] = []
         count = 0
+        max_probes = self._max_probes_per_module()
         with results_path.open("w", encoding="utf-8") as fh:
             for attack in attacks:
                 module_name = getattr(attack, "name", attack.__class__.__name__)
@@ -202,6 +203,8 @@ class AEGISOrchestrator:
                     errors.append(err)
                     logger.exception("Attack payload generation failed for module '%s'", module_name)
                     continue
+
+                self._cap_attack_payloads(attack, max_probes)
 
                 try:
                     results = attack.execute(self.agent)
@@ -328,6 +331,25 @@ class AEGISOrchestrator:
                 return obj()
 
         raise ValueError(f"No attack class found in module '{module_name}'")
+
+    def _max_probes_per_module(self) -> int | None:
+        raw = self.config.get("orchestration", {}).get("max_probes_per_module")
+        if raw is None:
+            return None
+        try:
+            value = int(raw)
+        except (TypeError, ValueError):
+            logger.warning("Invalid max_probes_per_module=%r; ignoring cap.", raw)
+            return None
+        return value if value > 0 else None
+
+    @staticmethod
+    def _cap_attack_payloads(attack: AttackModule, max_probes: int | None) -> None:
+        if max_probes is None:
+            return
+        payloads = getattr(attack, "_payloads", None)
+        if isinstance(payloads, list) and len(payloads) > max_probes:
+            attack._payloads = payloads[:max_probes]
 
     def _load_scorers(self) -> list[Scorer]:
         scorer_names = [str(name) for name in self.config["evaluation"]["scorers"]]

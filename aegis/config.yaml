@@ -1,6 +1,12 @@
 # AEGIS Default Configuration
 # All tracks read from this file via aegis.config.load_config()
 # Changes require consensus from both track owners.
+#
+# Lightweight-by-default: AEGIS ships with provider.mode=offline and the
+# rule_based scorer only so that a fresh clone (and cloud BYO-model users)
+# can run the full pipeline in seconds with no Ollama / HuggingFace
+# dependency. To exercise a live model, flip provider.mode to `ollama` /
+# `huggingface` and add `llm_judge` back to evaluation.scorers.
 
 testbed:
   model: "qwen3:4b"                # primary local agent model (Ollama)
@@ -8,7 +14,7 @@ testbed:
   context_length: 4096              # 4GB VRAM budget — do not exceed
   model_provider: "ollama"          # legacy key: ollama | huggingface | anthropic
   provider:
-    mode: "auto"                    # auto | ollama | huggingface | offline
+    mode: "offline"                 # auto | ollama | huggingface | offline
     ollama_base_url: "http://localhost:11434"
     ollama_health_timeout_seconds: 3
     ollama_generate_timeout_seconds: 90
@@ -93,6 +99,11 @@ testbed:
     code_exec_max_output_chars: 8000
     code_exec_max_code_chars: 8000
 
+orchestration:
+  # Cap payloads executed per attack module. `null` means no cap.
+  # Set to a small integer (e.g. 1 or 2) for fast cloud smoke runs.
+  max_probes_per_module: null
+
 attacks:
   modules:
     - asi01_goal_hijack
@@ -116,7 +127,7 @@ attacks:
 evaluation:
   scorers:
     - rule_based
-    - llm_judge
+    # - llm_judge   # enable when an Ollama judge is reachable (see provider.mode)
   judge_model: "qwen3:1.7b"
   judge_timeout_seconds: 120
   judge_max_retries: 3
