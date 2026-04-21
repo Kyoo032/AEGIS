@@ -246,9 +246,12 @@ class TestLLMJudgeScorerRetry:
     def test_call_judge_requests_structured_json_schema(self):
         scorer = LLMJudgeScorer(hard_fail=True, max_retries=0)
         judge_response = {
-            "response": json.dumps(
-                {"success": True, "confidence": 0.8, "reasoning": "tool call executed"}
-            )
+            "message": {
+                "role": "assistant",
+                "content": json.dumps(
+                    {"success": True, "confidence": 0.8, "reasoning": "tool call executed"}
+                ),
+            }
         }
         captured: list[dict] = []
 
@@ -261,6 +264,8 @@ class TestLLMJudgeScorerRetry:
 
         assert result.success is True
         request_body = captured[0]
+        assert request_body["think"] is False
+        assert request_body["messages"][0]["role"] == "user"
         assert request_body["format"]["type"] == "object"
         assert request_body["format"]["required"] == ["success", "confidence", "reasoning"]
         assert request_body["options"]["temperature"] == 0

@@ -262,7 +262,9 @@ class TestDefaultAgentTimeoutRetry:
         seen_timeout = {}
 
         ok_response = MagicMock()
-        ok_response.read.return_value = json.dumps({"response": "stable answer"}).encode("utf-8")
+        ok_response.read.return_value = json.dumps(
+            {"message": {"role": "assistant", "content": "stable answer"}}
+        ).encode("utf-8")
         ok_response.__enter__.return_value = ok_response
         ok_response.__exit__.return_value = False
 
@@ -276,6 +278,8 @@ class TestDefaultAgentTimeoutRetry:
 
         payload = json.loads(seen_request["body"])
         assert payload["keep_alive"] == "1m"
+        assert payload["think"] is False
+        assert payload["messages"] == [{"role": "user", "content": "prompt"}]
         assert payload["options"]["num_predict"] == 32
         assert seen_timeout["value"] == pytest.approx(0.05)
         assert output == "stable answer"
@@ -285,7 +289,9 @@ class TestDefaultAgentTimeoutRetry:
 
         agent = DefaultAgent(config=_offline_cfg("default"))
         ok_response = MagicMock()
-        ok_response.read.return_value = json.dumps({"response": "stable answer"}).encode("utf-8")
+        ok_response.read.return_value = json.dumps(
+            {"message": {"role": "assistant", "content": "stable answer"}}
+        ).encode("utf-8")
         ok_response.__enter__.return_value = ok_response
         ok_response.__exit__.return_value = False
 
@@ -315,7 +321,9 @@ class TestDefaultAgentTimeoutRetry:
         agent = DefaultAgent(config=_offline_cfg("default"))
         agent._provider_name = "ollama"
         empty_response = MagicMock()
-        empty_response.read.return_value = json.dumps({"response": ""}).encode("utf-8")
+        empty_response.read.return_value = json.dumps(
+            {"message": {"role": "assistant", "content": ""}}
+        ).encode("utf-8")
         empty_response.__enter__.return_value = empty_response
         empty_response.__exit__.return_value = False
 

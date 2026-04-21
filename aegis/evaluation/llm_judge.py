@@ -172,11 +172,12 @@ class LLMJudgeScorer(Scorer):
         )
 
     def _call_judge(self, prompt: str) -> dict:
-        """Call Ollama /api/generate with retries on network/parse failure."""
+        """Call Ollama /api/chat with retries on network/parse failure."""
         body = json.dumps(
             {
                 "model": self._judge_model,
-                "prompt": prompt,
+                "messages": [{"role": "user", "content": prompt}],
+                "think": False,
                 "stream": False,
                 "format": _JUDGE_RESPONSE_SCHEMA,
                 "keep_alive": self._keep_alive,
@@ -190,7 +191,7 @@ class LLMJudgeScorer(Scorer):
         for attempt in range(attempts):
             try:
                 request = Request(
-                    f"{self._base_url}/api/generate",
+                    f"{self._base_url}/api/chat",
                     data=body,
                     method="POST",
                     headers={"Content-Type": "application/json"},
@@ -232,7 +233,9 @@ class LLMJudgeScorer(Scorer):
         except json.JSONDecodeError:
             return None
 
-        inner_text = outer.get("response", "")
+        inner_text = outer.get("message", {}).get("content", "")
+        if not inner_text:
+            inner_text = outer.get("response", "")
         if not inner_text:
             return None
 
