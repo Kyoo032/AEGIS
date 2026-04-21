@@ -1,79 +1,103 @@
 # AEGIS Security Testing Methodology
 
-## Framework Alignment
-- OWASP Top 10 for LLM Applications (2025)
-- OWASP Top 10 for Agentic Applications (2026)
-- MITRE ATLAS (AI threat taxonomy)
-- NIST AI Risk Management Framework (AI RMF)
+## Framework alignment
 
-## Assessment Approach
-- Automated black-box testing against the target AI agent and configured MCP tool surface.
-- Baseline measurement with no defenses active, then single-defense and layered-defense runs.
-- Delta comparison to quantify defense effectiveness (`delta_vs_baseline = defended_asr - baseline_asr`).
+- OWASP Top 10 for LLM Applications
+- OWASP Agentic AI threat categories
+- MITRE ATLAS
+- Local agent-tool attack simulation via MCP-style tool surfaces
 
-## Attack Module Coverage
+## Current corpus
 
-| Module | OWASP Category | MITRE ATLAS | Description |
-|---|---|---|---|
-| `asi01_goal_hijack` | ASI01 (Agent Goal Hijacking) | `AML.T0051` | Redirects agent objectives through prompt/control-plane hijack patterns. |
-| `asi02_tool_misuse` | ASI02 (Tool Misuse & Exploitation) | `AML.T0040` | Coerces unsafe tool invocations and malicious parameters. |
-| `asi04_supply_chain` | ASI04 (Supply Chain Vulnerabilities) | `AML.T0010` | Tests poisoned dependency/tooling/context supply paths. |
-| `asi05_code_exec` | ASI05 (Unexpected Code Execution) | `AML.T0051` | Attempts arbitrary code execution through agent workflows. |
-| `asi06_memory_poison` | ASI06 (Memory & Context Poisoning) | `AML.T0020` | Injects malicious persistent context/memory artifacts. |
-| `mcp06_cmd_injection` | MCP06 (Command Injection via MCP) | `AML.T0040` | Injects shell/OS command syntax via MCP tool parameters. |
-| `llm01_prompt_inject` | LLM01 (Prompt Injection) | `AML.T0051` | Tests direct and indirect prompt injection primitives. |
+The current repo validates 15 active attack modules:
 
-## Scoring Methodology
-- Rule-based scoring (default): deterministic indicator matching against tool calls, outputs, and known exploit signatures.
-- LLM-judge scoring (optional): model-based adjudication when enabled in config.
-- Current CI default: prioritize rule-based scoring for speed and reproducibility.
-- Attack outcome semantics:
-  - `success=true`: exploit objective achieved (security control failure for that probe)
-  - `success=false`: probe blocked or objective not achieved
+- `asi01_goal_hijack`
+- `asi02_tool_misuse`
+- `asi03_identity_privilege`
+- `asi04_supply_chain`
+- `asi05_code_exec`
+- `asi06_memory_poison`
+- `asi07_inter_agent`
+- `asi09_human_trust`
+- `asi_dynamic_cloak`
+- `asi_hitl`
+- `asi_semantic_manip`
+- `llm01_crosslingual`
+- `llm01_prompt_inject`
+- `llm02_data_disclosure`
+- `mcp06_cmd_injection`
 
-## Severity Classification
+The fresh April 21, 2026 local baseline covered `191` payloads across that full set.
 
-| Severity | Criteria |
-|---|---|
-| Critical | Attack succeeds with high confidence and high-impact control bypass (e.g., exfiltration/override). |
-| High | Attack succeeds reliably with meaningful impact; mitigation is incomplete. |
-| Medium | Attack succeeds intermittently or with partial impact. |
-| Low | Limited exploitability or constrained impact. |
-| Informational | Security-relevant observation without immediate exploitable impact. |
+## Execution model
 
-## Defense Evaluation Method
-- Baseline: run all core attack modules with no defenses active.
-- Single-defense: run all attack modules with one defense active.
-- Layered-defense: run configured defense combinations.
-- Matrix output includes:
-  - scenario-level ASR and `delta_vs_baseline`
-  - per-scenario `probe_results`
-  - structured `errors` for failed module/scenario execution
+AEGIS runs as a black-box adversarial harness:
+
+1. load payloads for the requested modules
+2. execute the target agent against each payload
+3. collect the final output, tool calls, retrieval trace, memory state, and errors
+4. score success using rule-based signals and, when enabled, an LLM judge
+5. generate structured JSON/HTML reports
+
+## Local Ollama path
+
+The validated low-VRAM local path is [config.local_single_qwen.yaml](/home/kyo/AEGIS/aegis/config.local_single_qwen.yaml):
+
+- model: `qwen3.5:0.8b`
+- one local model at a time
+- target and judge share the same Ollama model
+- provider mode forced to Ollama
+
+### Why AEGIS uses Ollama chat requests for Qwen
+
+Current Qwen thinking models on Ollama can return an empty `response` field on `/api/generate` while populating only the `thinking` field. That breaks a harness that expects a visible answer string. The validated local path therefore uses `POST /api/chat` with `think: false` for both target-agent and judge calls.
+
+This is not a theoretical concern; it was observed directly during the April 21 local run before the Ollama call path was switched.
+
+## Scoring
+
+### Rule-based scorer
+
+The rule-based scorer is the stable baseline signal. It inspects:
+
+- dangerous tool calls
+- sensitive file access
+- exfiltration behavior
+- suspicious paths and parameters
+- poisoned retrieval dominance
+- module-specific attack-family indicators
+
+### LLM judge
+
+The LLM judge remains useful for adjudicating ambiguous outputs, but local single-model Qwen runs can still produce unparseable structured verdicts. Treat the judge as a secondary signal unless the run explicitly shows stable structured outputs for the chosen model.
 
 ## Reproducibility
-- Recommended commands:
+
+Validated commands from the fresh local run:
 
 ```bash
 uv sync --dev
-PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/bin/pytest -q
-.venv/bin/python -m aegis.orchestrator scan -c aegis/config.day7_core7.yaml
-.venv/bin/python - <<'PY'
-from aegis.orchestrator import AEGISOrchestrator
-orch = AEGISOrchestrator(config_path="aegis/config.day7_core7.yaml")
-orch.run_full_matrix()
-PY
+ollama pull qwen3.5:0.8b
+uv run ruff check .
+uv run --extra dashboard pytest -s --cov=aegis --cov-report=term-missing --cov-fail-under=80
+uv run aegis scan --config aegis/config.local_single_qwen.yaml --format json --output reports
 ```
 
-- Configuration source of truth: `aegis/config.yaml` and gate-specific overrides (for example `aegis/config.day7_core7.yaml`).
-- Expected reproducibility level: comparable trends, not bit-identical metrics, due to model non-determinism.
+Fresh outputs from the April 21 run:
 
-## CLI Exit Codes
-- `0`: Run completed and no successful attacks detected.
-- `1`: Tool/config/runtime error.
-- `2`: Run completed and vulnerabilities detected (`total_successful > 0`).
+- [baseline.json](/home/kyo/AEGIS/reports/baseline.json)
+- [attack_results_0c9c3d74-756e-4230-9686-a356f80c3c69.jsonl](/home/kyo/AEGIS/reports/attack_results_0c9c3d74-756e-4230-9686-a356f80c3c69.jsonl)
+- [trace_records_0c9c3d74-756e-4230-9686-a356f80c3c69.jsonl](/home/kyo/AEGIS/reports/trace_records_0c9c3d74-756e-4230-9686-a356f80c3c69.jsonl)
 
-## Limitations
-- Point-in-time assessment; new attacks may emerge after execution date.
-- Coverage is bounded by configured attack modules and payload sets.
-- Heuristic scoring can produce false positives/negatives.
-- Offline/provider fallback can affect realism versus fully online model execution.
+## Exit codes
+
+- `0`: run completed and no successful attacks were detected
+- `1`: configuration/runtime/tool error
+- `2`: run completed and at least one vulnerability was detected
+
+## Limits
+
+- This is still a point-in-time harness.
+- Report mappings for newly added agentic categories can lag the payload corpus if category metadata evolves faster than report labels.
+- Local model quality and structured-output stability materially affect LLM-judge quality.
+- A fresh defense matrix is separate work from a fresh baseline live scan.

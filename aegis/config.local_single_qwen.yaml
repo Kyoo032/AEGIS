@@ -1,0 +1,34 @@
+# Local single-model config for low-VRAM Ollama runs.
+# Uses one Qwen model for both target execution and judge scoring.
+
+testbed:
+  model: "qwen3.5:0.8b"
+  fallback_model: "qwen3.5:0.8b"
+  provider:
+    mode: "ollama"
+    ollama_base_url: "http://localhost:11434"
+    ollama_health_timeout_seconds: 5
+    ollama_generate_timeout_seconds: 120
+    ollama_num_predict: 128
+    ollama_keep_alive: "2m"
+    require_external: true
+  agent_profile: "default"
+
+attacks: {}
+
+evaluation:
+  scorers:
+    - rule_based
+    - llm_judge
+  judge_model: "qwen3.5:0.8b"
+  judge_timeout_seconds: 180
+  judge_max_retries: 2
+  judge_num_predict: 128
+  judge_keep_alive: "2m"
+  judge_hard_fail: true
+
+defenses: {}
+
+reporting:
+  formats: ["json", "html"]
+  output_dir: "./reports"

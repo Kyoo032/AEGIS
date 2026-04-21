@@ -888,7 +888,8 @@ class DefaultAgent(AgentInterface):
         )
         body = json.dumps({
             "model": model,
-            "prompt": prompt,
+            "messages": [{"role": "user", "content": prompt}],
+            "think": False,
             "stream": False,
             "keep_alive": keep_alive,
             "options": {"num_predict": num_predict},
@@ -896,7 +897,7 @@ class DefaultAgent(AgentInterface):
 
         def _invoke() -> str:
             request = Request(
-                f"{base_url}/api/generate",
+                f"{base_url}/api/chat",
                 data=body,
                 method="POST",
                 headers={"Content-Type": "application/json"},
@@ -906,11 +907,14 @@ class DefaultAgent(AgentInterface):
             try:
                 parsed = json.loads(raw)
             except json.JSONDecodeError as exc:
-                raise ValueError("invalid JSON from Ollama /api/generate") from exc
-            content = parsed.get("response", "")
+                raise ValueError("invalid JSON from Ollama /api/chat") from exc
+            message = parsed.get("message", {})
+            content = message.get("content", "")
+            if not content:
+                content = parsed.get("response", "")
             text = str(content).strip()
             if not text:
-                raise ValueError("empty response from Ollama /api/generate")
+                raise ValueError("empty response from Ollama /api/chat")
             return text
 
         return call_with_retry(
