@@ -140,7 +140,7 @@ class BaseAttackModule(AttackModule):
             )
             raise ValueError(msg)
 
-        candidate_dirs = [dataset_payloads_dir, package_payloads_dir]
+        candidate_dirs = [package_payloads_dir, dataset_payloads_dir]
         for payloads_dir in candidate_dirs:
             resolved = (payloads_dir / f"{self.name}.yaml").resolve()
             if not resolved.is_relative_to(payloads_dir.resolve()):

@@ -1,12 +1,13 @@
 """Tests for aegis/cli.py."""
 from __future__ import annotations
 
+import importlib
 import json
+import sys
 from datetime import UTC, datetime
 
 from typer.testing import CliRunner
 
-from aegis.cli import app
 from aegis.models import Finding, OWASPCategoryResult, SecurityReport, Severity
 
 
@@ -40,7 +41,14 @@ def _sample_report(report_id: str) -> SecurityReport:
     )
 
 
+def _reload_cli_module():
+    sys.modules.pop("aegis.cli", None)
+    return importlib.import_module("aegis.cli")
+
+
 def test_scan_command_writes_json_report(monkeypatch, tmp_path):
+    cli = _reload_cli_module()
+
     class FakeOrchestrator:
         def __init__(self, config_path=None):
             self.config_path = config_path
@@ -54,10 +62,10 @@ def test_scan_command_writes_json_report(monkeypatch, tmp_path):
         def run_baseline(self) -> SecurityReport:
             return _sample_report("baseline")
 
-    monkeypatch.setattr("aegis.cli.AEGISOrchestrator", FakeOrchestrator)
+    monkeypatch.setattr(cli, "AEGISOrchestrator", FakeOrchestrator)
 
     runner = CliRunner()
-    result = runner.invoke(app, ["scan", "-f", "json", "-o", str(tmp_path)])
+    result = runner.invoke(cli.app, ["scan", "-f", "json", "-o", str(tmp_path)])
     assert result.exit_code == 2
     report_file = tmp_path / "baseline.json"
     assert report_file.exists()
@@ -66,6 +74,7 @@ def test_scan_command_writes_json_report(monkeypatch, tmp_path):
 
 
 def test_report_command_renders_html(tmp_path):
+    cli = _reload_cli_module()
     json_path = tmp_path / "in.json"
     html_path = tmp_path / "out.html"
     json_path.write_text(
@@ -74,13 +83,17 @@ def test_report_command_renders_html(tmp_path):
     )
 
     runner = CliRunner()
-    result = runner.invoke(app, ["report", "-i", str(json_path), "-f", "html", "-o", str(html_path)])
+    result = runner.invoke(
+        cli.app,
+        ["report", "-i", str(json_path), "-f", "html", "-o", str(html_path)],
+    )
     assert result.exit_code == 0
     assert html_path.exists()
     assert "AEGIS Security Report" in html_path.read_text(encoding="utf-8")
 
 
 def test_report_command_renders_json(tmp_path):
+    cli = _reload_cli_module()
     json_path = tmp_path / "in.json"
     out_path = tmp_path / "out.json"
     json_path.write_text(
@@ -89,41 +102,54 @@ def test_report_command_renders_json(tmp_path):
     )
 
     runner = CliRunner()
-    result = runner.invoke(app, ["report", "-i", str(json_path), "-f", "json", "-o", str(out_path)])
+    result = runner.invoke(
+        cli.app,
+        ["report", "-i", str(json_path), "-f", "json", "-o", str(out_path)],
+    )
     assert result.exit_code == 0
     parsed = json.loads(out_path.read_text(encoding="utf-8"))
     assert parsed["report_id"] == "for-json"
 
 
 def test_attack_unknown_module_lists_available(monkeypatch):
-    class FakeOrchestrator:
-        def __init__(self, config_path=None):
-            self.config_path = config_path
-
-        def get_available_attack_modules(self):
-            return ["asi01_goal_hijack", "llm01_prompt_inject"]
-
-    monkeypatch.setattr("aegis.cli.AEGISOrchestrator", FakeOrchestrator)
+    cli = _reload_cli_module()
 
     runner = CliRunner()
-    result = runner.invoke(app, ["attack", "--module", "does_not_exist"])
+    result = runner.invoke(cli.app, ["attack", "--module", "does_not_exist"])
     assert result.exit_code == 1
     assert "Unknown attack module" in result.output
     assert "asi01_goal_hijack" in result.output
 
 
 def test_defend_unknown_defense_lists_available(monkeypatch):
-    class FakeOrchestrator:
-        def __init__(self, config_path=None):
-            self.config_path = config_path
-
-        def get_available_defenses(self):
-            return ["input_validator", "tool_boundary"]
-
-    monkeypatch.setattr("aegis.cli.AEGISOrchestrator", FakeOrchestrator)
+    cli = _reload_cli_module()
 
     runner = CliRunner()
-    result = runner.invoke(app, ["defend", "--defense", "bad_defense"])
+    result = runner.invoke(cli.app, ["defend", "--defense", "bad_defense"])
     assert result.exit_code == 1
     assert "Unknown defense" in result.output
     assert "input_validator" in result.output
+
+
+def test_cli_import_is_lazy():
+    for module_name in list(sys.modules):
+        if module_name == "aegis.cli" or module_name.startswith("aegis.orchestrator"):
+            sys.modules.pop(module_name, None)
+        if module_name.startswith("aegis.reporting.report_generator"):
+            sys.modules.pop(module_name, None)
+
+    _reload_cli_module()
+
+    assert "aegis.orchestrator" not in sys.modules
+    assert "aegis.reporting.report_generator" not in sys.modules
+
+
+def test_invalid_attack_does_not_import_orchestrator():
+    cli = _reload_cli_module()
+    sys.modules.pop("aegis.orchestrator", None)
+
+    runner = CliRunner()
+    result = runner.invoke(cli.app, ["attack", "--module", "does_not_exist"])
+
+    assert result.exit_code == 1
+    assert "aegis.orchestrator" not in sys.modules

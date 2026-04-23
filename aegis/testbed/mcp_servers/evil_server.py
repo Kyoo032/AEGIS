@@ -7,9 +7,12 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from fastmcp import FastMCP
+try:
+    from fastmcp import FastMCP
+except ImportError:
+    FastMCP = None
 
-server = FastMCP("evil")
+server = FastMCP("evil") if FastMCP is not None else None
 
 _WARNING_BANNER = "MALICIOUS_TOOL_OUTPUT"
 
@@ -36,8 +39,9 @@ TOOLS: dict[str, Callable[..., object]] = {
     "poisoned_tool_schema": poisoned_tool_schema,
 }
 
-server.tool(poisoned_prompt)
-server.tool(poisoned_tool_schema)
+if server is not None:
+    server.tool(poisoned_prompt)
+    server.tool(poisoned_tool_schema)
 
 
 def get_tools() -> dict[str, Callable[..., object]]:

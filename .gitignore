@@ -25,6 +25,8 @@ tmp/
 TASK_PROMPTS.md
 claude.md
 plan.md
+scripts/generate_app_summary_pdf.py
+scripts/render_pdf_page.py
 
 # Generated KB corpus (users run build_kb_corpus.py)
 datasets/kb/

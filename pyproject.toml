@@ -11,20 +11,27 @@ requires-python = ">=3.11"
 license = { text = "MIT" }
 
 dependencies = [
-    "langchain==0.3.27",
-    "langchain-community==0.3.31",
-    "langgraph==0.2.76",
-    "fastmcp==2.14.5",
-    "chromadb==1.5.0",
     "pydantic==2.12.5",
     "typer==0.23.1",
     "jinja2==3.1.6",
     "pyyaml==6.0.3",
-    "deepeval==3.8.4",
 ]
 
 [project.optional-dependencies]
+local = [
+    "fastmcp==2.14.5",
+    "langchain==0.3.27",
+    "langchain-community==0.3.31",
+]
+research = [
+    "chromadb==1.5.0",
+    "deepeval==3.8.4",
+    "langgraph==0.2.76",
+]
 dev = [
+    "fastmcp==2.14.5",
+    "langchain==0.3.27",
+    "langchain-community==0.3.31",
     "pytest==9.0.2",
     "pytest-cov==7.0.0",
     "jsonschema==4.26.0",
@@ -97,7 +104,10 @@ fail_under = 80
 [dependency-groups]
 dev = [
     "coverage==7.13.4",
+    "fastmcp==2.14.5",
     "jsonschema==4.26.0",
+    "langchain==0.3.27",
+    "langchain-community==0.3.31",
     "pyright>=1.1.408",
     "pytest-cov==7.0.0",
     "ruff==0.15.1",

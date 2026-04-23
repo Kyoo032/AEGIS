@@ -7,9 +7,12 @@ from collections.abc import Callable
 from tempfile import NamedTemporaryFile
 from typing import Any
 
-from fastmcp import FastMCP
+try:
+    from fastmcp import FastMCP
+except ImportError:
+    FastMCP = None
 
-server = FastMCP("code_exec")
+server = FastMCP("code_exec") if FastMCP is not None else None
 
 _MAX_STDOUT = 8000
 _MAX_CODE_CHARS = 8000
@@ -128,7 +131,8 @@ TOOLS: dict[str, Callable[..., object]] = {
     "execute_code": execute_code,
 }
 
-server.tool(execute_code)
+if server is not None:
+    server.tool(execute_code)
 
 
 def get_tools() -> dict[str, Callable[..., object]]:

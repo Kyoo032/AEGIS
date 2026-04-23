@@ -11,21 +11,40 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+from aegis.lazy_loading import load_symbol
 from aegis.attacks.base import BaseAttackModule
-from aegis.attacks.llm01_prompt_inject import PromptInjectionModule
 from aegis.config import load_config
-from aegis.evaluation.pipeline import EvaluationPipeline
-from aegis.evaluation.protocol_adapter import ProtocolScorerAdapter
-from aegis.evaluation.scorer import RuleBasedScorer
 from aegis.evidence.store import EvidenceTraceStore
 from aegis.interfaces.attack import AttackModule
 from aegis.interfaces.scorer import Scorer
 from aegis.interfaces.scorer_protocol import ScorerProtocol
 from aegis.models import AttackResult, EvaluationResult, SecurityReport, TraceRecord
-from aegis.reporting.report_generator import ReportGenerator
-from aegis.testbed.agent import DefaultAgent
 
 logger = logging.getLogger(__name__)
+
+
+def _load_default_agent():
+    return load_symbol("aegis.testbed.agent", "DefaultAgent")
+
+
+def _load_evaluation_pipeline():
+    return load_symbol("aegis.evaluation.pipeline", "EvaluationPipeline")
+
+
+def _load_protocol_scorer_adapter():
+    return load_symbol("aegis.evaluation.protocol_adapter", "ProtocolScorerAdapter")
+
+
+def _load_prompt_injection_module():
+    return load_symbol("aegis.attacks.llm01_prompt_inject", "PromptInjectionModule")
+
+
+def _load_report_generator():
+    return load_symbol("aegis.reporting.report_generator", "ReportGenerator")
+
+
+def _load_rule_based_scorer():
+    return load_symbol("aegis.evaluation.scorer", "RuleBasedScorer")
 
 
 class AEGISOrchestrator:
@@ -38,19 +57,30 @@ class AEGISOrchestrator:
         protocol_scorers: list[ScorerProtocol] | None = None,
     ) -> None:
         self.config = load_config(config_path)
-        self.agent = DefaultAgent(config=dict(self.config["testbed"]))
-        self.attacks = self._load_attacks()
+        self._agent: Any | None = None
+        self.attacks: list[AttackModule] | None = None
 
         configured_scorers: list[Scorer] = (
             list(scorers) if scorers is not None else self._load_scorers()
         )
         if protocol_scorers:
-            configured_scorers.extend(ProtocolScorerAdapter(scorer) for scorer in protocol_scorers)
+            adapter_cls = _load_protocol_scorer_adapter()
+            configured_scorers.extend(adapter_cls(scorer) for scorer in protocol_scorers)
         if not configured_scorers:
-            configured_scorers = [RuleBasedScorer()]
+            configured_scorers = [_load_rule_based_scorer()()]
         self.scorers = configured_scorers
 
         self._last_run_errors: list[dict[str, Any]] = []
+
+    @property
+    def agent(self):
+        if self._agent is None:
+            self._agent = _load_default_agent()(config=dict(self.config["testbed"]))
+        return self._agent
+
+    @agent.setter
+    def agent(self, value: Any) -> None:
+        self._agent = value
 
     # ------------------------------------------------------------------
     # Public API — high-level convenience methods
@@ -181,18 +211,22 @@ class AEGISOrchestrator:
     ) -> Path:
         """Execute attacks, save results to JSONL, return the file path."""
         if attacks is None:
-            attacks = self.attacks
+            attacks = self._get_attacks()
 
         run_id = str(uuid4())
         output_dir = Path(self.config["reporting"].get("output_dir", "./reports"))
         output_dir.mkdir(parents=True, exist_ok=True)
         results_path = output_dir / f"attack_results_{run_id}.jsonl"
         trace_store = EvidenceTraceStore(output_dir)
-        trace_records: list[TraceRecord] = []
+        trace_store.output_dir.mkdir(parents=True, exist_ok=True)
+        trace_path = trace_store.path_for_run(run_id)
 
         errors: list[dict[str, Any]] = []
         count = 0
-        with results_path.open("w", encoding="utf-8") as fh:
+        with (
+            results_path.open("w", encoding="utf-8") as results_fh,
+            trace_path.open("a", encoding="utf-8") as trace_fh,
+        ):
             for attack in attacks:
                 module_name = getattr(attack, "name", attack.__class__.__name__)
                 try:
@@ -212,11 +246,10 @@ class AEGISOrchestrator:
                     continue
 
                 for result in results:
-                    fh.write(result.model_dump_json() + "\n")
-                    trace_records.append(_trace_record_from_attack_result(result))
+                    results_fh.write(result.model_dump_json() + "\n")
+                    trace_fh.write(_trace_record_from_attack_result(result).model_dump_json() + "\n")
                     count += 1
 
-        trace_path = trace_store.append_many(run_id=run_id, records=trace_records)
         self._last_run_errors = errors
         logger.info(
             "Saved %d attack results to %s and traces to %s (run_id=%s, errors=%d)",
@@ -260,7 +293,10 @@ class AEGISOrchestrator:
                         }
                     )
 
-        pipeline = EvaluationPipeline(scorers=self.scorers)
+        pipeline = _load_evaluation_pipeline()(
+            scorers=self.scorers,
+            config=dict(self.config.get("evaluation", {})),
+        )
         try:
             eval_results = pipeline.evaluate(attack_results)
         except Exception as exc:
@@ -278,7 +314,7 @@ class AEGISOrchestrator:
         defense_name: str | None,
         run_errors: list[dict[str, Any]] | None = None,
     ) -> SecurityReport:
-        generator = ReportGenerator()
+        generator = _load_report_generator()()
         return generator.generate(
             eval_results,
             defense_name=defense_name,
@@ -294,6 +330,11 @@ class AEGISOrchestrator:
         """Return configured defense names."""
         return [str(name) for name in self.config["defenses"]["available"]]
 
+    def _get_attacks(self) -> list[AttackModule]:
+        if self.attacks is None:
+            self.attacks = self._load_attacks()
+        return self.attacks
+
     def _load_attacks(self) -> list[AttackModule]:
         attack_names = self.config["attacks"]["modules"]
         attacks: list[AttackModule] = []
@@ -305,7 +346,7 @@ class AEGISOrchestrator:
 
         if not attacks:
             logger.warning("No configured attack modules loaded; using PromptInjectionModule fallback")
-            attacks.append(PromptInjectionModule())
+            attacks.append(_load_prompt_injection_module()())
         return attacks
 
     def _load_single_attack(self, module_name: str) -> AttackModule:
@@ -332,15 +373,16 @@ class AEGISOrchestrator:
     def _load_scorers(self) -> list[Scorer]:
         scorer_names = [str(name) for name in self.config["evaluation"]["scorers"]]
         scorers: list[Scorer] = []
+        rule_based_scorer_cls = _load_rule_based_scorer()
         for name in scorer_names:
             if name == "rule_based":
-                scorers.append(RuleBasedScorer())
+                scorers.append(rule_based_scorer_cls())
             elif name == "llm_judge":
                 scorers.append(self._build_llm_judge_scorer())
             else:
                 logger.warning("Skipping unavailable scorer '%s'", name)
         if not scorers:
-            scorers.append(RuleBasedScorer())
+            scorers.append(rule_based_scorer_cls())
         return scorers
 
     def _build_llm_judge_scorer(self) -> Scorer:
