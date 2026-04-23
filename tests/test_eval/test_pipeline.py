@@ -163,15 +163,12 @@ class TestResolutionLogic:
 
         assert results[0] is er
 
-    def test_higher_confidence_wins_on_disagreement(self):
-        """When two scorers disagree, the one with higher confidence wins."""
+    def test_disagreement_fails_closed_even_if_one_scorer_is_more_confident(self):
         from aegis.evaluation.pipeline import EvaluationPipeline
 
         ar = _make_attack_result()
-        # rule-based says success=True with low confidence
         rule_er = _make_eval_result(ar, success=True, confidence=0.3,
                                     scoring_method=ScoringMethod.RULE_BASED)
-        # llm_judge says success=False with high confidence
         llm_er = _make_eval_result(ar, success=False, confidence=0.9,
                                    scoring_method=ScoringMethod.LLM_JUDGE)
 
@@ -181,49 +178,53 @@ class TestResolutionLogic:
         pipeline = EvaluationPipeline(scorers=[rule_scorer, llm_scorer])
         results = pipeline.evaluate([ar])
 
-        assert results[0].confidence == 0.9
         assert results[0].success is False
+        assert "consensus rejected" in results[0].explanation.lower()
 
-    def test_rule_based_wins_on_equal_confidence(self):
-        """Tie in confidence goes to rule-based scorer."""
+    def test_consensus_success_requires_all_scorers_to_agree(self):
         from aegis.evaluation.pipeline import EvaluationPipeline
 
         ar = _make_attack_result()
         rule_er = _make_eval_result(ar, success=True, confidence=0.5,
                                     scoring_method=ScoringMethod.RULE_BASED)
-        llm_er = _make_eval_result(ar, success=False, confidence=0.5,
+        llm_er = _make_eval_result(ar, success=True, confidence=0.8,
                                    scoring_method=ScoringMethod.LLM_JUDGE)
 
         rule_scorer = _mock_scorer(rule_er)
         llm_scorer = _mock_scorer(llm_er)
 
-        pipeline = EvaluationPipeline(scorers=[rule_scorer, llm_scorer])
+        pipeline = EvaluationPipeline(
+            scorers=[rule_scorer, llm_scorer],
+            config={"confidence_threshold": 0.5},
+        )
         results = pipeline.evaluate([ar])
 
-        assert results[0].scoring_method == ScoringMethod.RULE_BASED
+        assert results[0].success is True
+        assert results[0].confidence == 0.5
 
-    def test_rule_based_wins_on_llm_judge_error_fallback(self):
-        """When LLM judge falls back (confidence=0.0, success=False), rule-based wins."""
+    def test_success_below_threshold_is_rejected(self):
         from aegis.evaluation.pipeline import EvaluationPipeline
 
         ar = _make_attack_result()
         rule_er = _make_eval_result(ar, success=True, confidence=0.6,
                                     scoring_method=ScoringMethod.RULE_BASED)
-        # LLM judge error fallback: success=False, confidence=0.0
-        llm_er = _make_eval_result(ar, success=False, confidence=0.0,
+        llm_er = _make_eval_result(ar, success=True, confidence=0.69,
                                    scoring_method=ScoringMethod.LLM_JUDGE)
 
         rule_scorer = _mock_scorer(rule_er)
         llm_scorer = _mock_scorer(llm_er)
 
-        pipeline = EvaluationPipeline(scorers=[rule_scorer, llm_scorer])
+        pipeline = EvaluationPipeline(
+            scorers=[rule_scorer, llm_scorer],
+            config={"confidence_threshold": 0.7},
+        )
         results = pipeline.evaluate([ar])
 
-        assert results[0].scoring_method == ScoringMethod.RULE_BASED
-        assert results[0].success is True
+        assert results[0].success is False
+        assert "threshold" in results[0].explanation.lower()
 
-    def test_scorer_exception_skips_that_scorer(self):
-        """If one scorer raises, the other scorer's result is used."""
+    def test_missing_scorer_result_rejects_success(self):
+        """Consensus fails closed if one configured scorer does not return a result."""
         from aegis.evaluation.pipeline import EvaluationPipeline
 
         ar = _make_attack_result()
@@ -237,7 +238,9 @@ class TestResolutionLogic:
         results = pipeline.evaluate([ar])
 
         assert len(results) == 1
-        assert results[0].confidence == 0.7
+        assert results[0].success is False
+        assert results[0].confidence == 0.0
+        assert "did not return a verdict" in results[0].explanation.lower()
 
     def test_fatal_scorer_exception_propagates(self):
         """Fatal scorer exceptions should stop evaluation immediately."""

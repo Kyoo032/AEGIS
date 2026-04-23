@@ -41,7 +41,7 @@ AEGIS runs as a black-box adversarial harness:
 
 ## Local Ollama path
 
-The validated low-VRAM local path is [config.local_single_qwen.yaml](/home/kyo/AEGIS/aegis/config.local_single_qwen.yaml):
+The validated low-VRAM local path is [config.local_single_qwen.yaml](../aegis/config.local_single_qwen.yaml):
 
 - model: `qwen3.5:0.8b`
 - one local model at a time
@@ -85,9 +85,9 @@ uv run aegis scan --config aegis/config.local_single_qwen.yaml --format json --o
 
 Fresh outputs from the April 21 run:
 
-- [baseline.json](/home/kyo/AEGIS/reports/baseline.json)
-- [attack_results_0c9c3d74-756e-4230-9686-a356f80c3c69.jsonl](/home/kyo/AEGIS/reports/attack_results_0c9c3d74-756e-4230-9686-a356f80c3c69.jsonl)
-- [trace_records_0c9c3d74-756e-4230-9686-a356f80c3c69.jsonl](/home/kyo/AEGIS/reports/trace_records_0c9c3d74-756e-4230-9686-a356f80c3c69.jsonl)
+- `reports/baseline.json` (local run output, gitignored)
+- `reports/attack_results_0c9c3d74-756e-4230-9686-a356f80c3c69.jsonl` (local run output, gitignored)
+- `reports/trace_records_0c9c3d74-756e-4230-9686-a356f80c3c69.jsonl` (local run output, gitignored)
 
 ## Exit codes
 

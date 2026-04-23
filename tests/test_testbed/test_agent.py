@@ -8,6 +8,7 @@ from urllib.error import HTTPError, URLError
 import pytest
 
 from aegis.models import AttackPayload, Severity
+from aegis.optional_dependencies import OptionalDependencyError, missing_dependency_error
 from aegis.testbed.agent import DefaultAgent
 from aegis.testbed.mock_agent import MockAgent, MockResponse
 from aegis.testbed.retry import LLMCallError, call_with_retry
@@ -162,6 +163,20 @@ class TestMockAgent:
 
 
 class TestDefaultAgentProfiles:
+    def test_offline_mode_skips_provider_health_checks(self, monkeypatch: pytest.MonkeyPatch):
+        def _raise_ollama(_self):
+            raise AssertionError("offline mode should not probe ollama")
+
+        def _raise_hf(_self, _provider_cfg):
+            raise AssertionError("offline mode should not probe huggingface")
+
+        monkeypatch.setattr(DefaultAgent, "_check_ollama_health", _raise_ollama)
+        monkeypatch.setattr(DefaultAgent, "_check_hf_token", _raise_hf)
+
+        agent = DefaultAgent(config=_offline_cfg("default"))
+
+        assert agent.get_config()["provider_selected"] == "offline"
+
     def test_default_profile_has_broad_servers(self):
         agent = DefaultAgent(config=_offline_cfg("default"))
         assert set(agent._configured_servers()) == {
@@ -218,6 +233,26 @@ class TestDefaultAgentProfiles:
 
 
 class TestDefaultAgentHealthCheck:
+    def test_health_check_skips_provider_probes_in_offline_mode(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        agent = DefaultAgent(config=_offline_cfg("default"))
+
+        def _raise_ollama():
+            raise AssertionError("offline health check should not probe ollama")
+
+        def _raise_hf(_provider_cfg):
+            raise AssertionError("offline health check should not probe huggingface")
+
+        monkeypatch.setattr(agent, "_check_ollama_health", _raise_ollama)
+        monkeypatch.setattr(agent, "_check_hf_token", _raise_hf)
+
+        health = agent.health_check()
+
+        assert health["provider"]["ollama"]["note"] == "skipped for provider mode 'offline'"
+        assert health["provider"]["huggingface"]["note"] == "skipped for provider mode 'offline'"
+
     def test_health_check_includes_provider_and_mcp_sections(self):
         agent = DefaultAgent(config=_offline_cfg("default"))
         health = agent.health_check()
@@ -358,17 +393,16 @@ class TestDefaultAgentOllamaToolDispatch:
         prompt = agent._build_prompt(_payload(), [])
         assert prompt.startswith("/no_think\n")
 
-    def test_ollama_tool_execution_uses_deterministic_dispatcher(self, monkeypatch: pytest.MonkeyPatch):
+    def test_ollama_tool_execution_uses_model_driven_dispatch(self, monkeypatch: pytest.MonkeyPatch):
         agent = DefaultAgent(config=_offline_cfg("default"))
         agent._provider_name = "ollama"
-        called_langchain = False
+        called_langchain: list[str] = []
 
-        def _raise_if_called(payload: AttackPayload):
-            nonlocal called_langchain
-            called_langchain = True
-            raise AssertionError("LangChain tool calling should not run for Ollama")
+        def _fake_langchain(payload: AttackPayload):
+            called_langchain.append(payload.id)
+            return []
 
-        monkeypatch.setattr(agent, "_execute_tools_langchain", _raise_if_called)
+        monkeypatch.setattr(agent, "_execute_tools_langchain", _fake_langchain)
 
         response = agent.run(
             _payload(
@@ -381,8 +415,55 @@ class TestDefaultAgentOllamaToolDispatch:
             )
         )
 
-        assert called_langchain is False
-        assert any(call.tool_name == "execute_code" for call in response.tool_calls)
+        assert called_langchain == ["TEST-AGENT-001"]
+        assert response.tool_calls == []
+
+    def test_huggingface_tool_execution_falls_back_to_deterministic_dispatch(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        agent = DefaultAgent(config=_offline_cfg("default"))
+        agent._provider_name = "huggingface"
+        called_offline: list[str] = []
+
+        def _fake_offline(payload: AttackPayload):
+            called_offline.append(payload.id)
+            return []
+
+        monkeypatch.setattr(agent, "_execute_tools_offline", _fake_offline)
+
+        response = agent.run(
+            _payload(
+                messages=[
+                    {
+                        "role": "user",
+                        "content": "Please execute_code with code `print('ok')`.",
+                    }
+                ]
+            )
+        )
+
+        assert called_offline == ["TEST-AGENT-001"]
+        assert response.tool_calls == []
+
+    def test_missing_tool_calling_dependencies_raise_clean_error(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        agent = DefaultAgent(config=_offline_cfg("default"))
+        agent._provider_name = "ollama"
+
+        def _missing_langchain(_payload: AttackPayload):
+            raise missing_dependency_error(
+                feature="LangChain tool execution",
+                extra="local",
+                packages=["langchain", "langchain-community"],
+            )
+
+        monkeypatch.setattr(agent, "_execute_tools_langchain", _missing_langchain)
+
+        with pytest.raises(OptionalDependencyError, match=r"aegis\[local\]"):
+            agent._execute_tools_llm(_payload())
 
     def test_target_tool_family_triggers_code_exec_tool(self):
         agent = DefaultAgent(config=_offline_cfg("default"))

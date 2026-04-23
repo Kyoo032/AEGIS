@@ -12,9 +12,9 @@ They are not the same run and should not be conflated.
 ## Latest live local baseline
 
 - Date: April 21, 2026
-- Config: [config.local_single_qwen.yaml](/home/kyo/AEGIS/aegis/config.local_single_qwen.yaml)
+- Config: [config.local_single_qwen.yaml](../aegis/config.local_single_qwen.yaml)
 - Model: `qwen3.5:0.8b`
-- Artifact: [baseline.json](/home/kyo/AEGIS/reports/baseline.json)
+- Artifact: `reports/baseline.json` (local run output, gitignored)
 - Scope: baseline only, no fresh defense-matrix rerun in this pass
 
 Key implication: the expanded corpus remains highly exploitable in a realistic one-model local setup. The fresh baseline does not invalidate the earlier matrix, but it does confirm that the newer attack families are not paper-only additions.
@@ -23,7 +23,7 @@ Key implication: the expanded corpus remains highly exploitable in a realistic o
 
 The current Phase 5 matrix artifact is:
 
-- [day89_defense_matrix_20260421T085027Z.json](/home/kyo/AEGIS/reports/day89_defense_matrix_20260421T085027Z.json)
+- `reports/day89_defense_matrix_20260421T085027Z.json` (local run output, gitignored)
 
 That matrix was the scoped Phase 5b v2 run and remains the best structured defense-comparison artifact currently in the repo.
 

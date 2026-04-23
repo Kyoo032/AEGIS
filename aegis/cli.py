@@ -6,18 +6,22 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Annotated, Literal
+from typing import TYPE_CHECKING, Annotated, Any, Literal
 
 import typer
-from pydantic import ValidationError
 
-from aegis.models import SecurityReport
-from aegis.orchestrator import AEGISOrchestrator
-from aegis.reporting.report_generator import ReportGenerator
+if TYPE_CHECKING:
+    from aegis.models import SecurityReport
+    from aegis.orchestrator import AEGISOrchestrator as _AEGISOrchestrator
+    from aegis.reporting.report_generator import ReportGenerator as _ReportGenerator
 
 EXIT_OK = 0
 EXIT_ERROR = 1
 EXIT_VULNS_FOUND = 2
+
+AEGISOrchestrator: type[Any] | None = None
+ReportGenerator: type[Any] | None = None
+SecurityReport: type[Any] | None = None
 
 app = typer.Typer(
     name="aegis",
@@ -31,9 +35,42 @@ app = typer.Typer(
 )
 
 
-def _write_report(report: SecurityReport, fmt: str, output_dir: Path, stem: str) -> Path:
+def _load_orchestrator() -> type[Any]:
+    global AEGISOrchestrator
+    if AEGISOrchestrator is None:
+        from aegis.orchestrator import AEGISOrchestrator as orchestrator_cls
+
+        AEGISOrchestrator = orchestrator_cls
+    return AEGISOrchestrator
+
+
+def _load_report_generator() -> type[Any]:
+    global ReportGenerator
+    if ReportGenerator is None:
+        from aegis.reporting.report_generator import ReportGenerator as generator_cls
+
+        ReportGenerator = generator_cls
+    return ReportGenerator
+
+
+def _load_security_report_model() -> type[Any]:
+    global SecurityReport
+    if SecurityReport is None:
+        from aegis.models import SecurityReport as model_cls
+
+        SecurityReport = model_cls
+    return SecurityReport
+
+
+def _load_config() -> Any:
+    from aegis.config import load_config
+
+    return load_config
+
+
+def _write_report(report: "SecurityReport", fmt: str, output_dir: Path, stem: str) -> Path:
     output_dir.mkdir(parents=True, exist_ok=True)
-    generator = ReportGenerator()
+    generator = _load_report_generator()()
     if fmt == "json":
         out_path = output_dir / f"{stem}.json"
         out_path.write_text(generator.render_json(report), encoding="utf-8")
@@ -103,7 +140,7 @@ def scan(
 ) -> None:
     """Fast baseline scan for PR/pre-commit checks (single run, no defense matrix)."""
     try:
-        orchestrator = AEGISOrchestrator(config_path=config)
+        orchestrator = _load_orchestrator()(config_path=config)
         report = orchestrator.run_baseline()
         out_path = _write_report(report, fmt, Path(output_dir), "baseline")
     except Exception as exc:
@@ -123,12 +160,13 @@ def attack(
 ) -> None:
     """Run a specific attack module."""
     try:
-        orchestrator = AEGISOrchestrator(config_path=config)
+        available_modules = [
+            str(name) for name in _load_config()(config).get("attacks", {}).get("modules", [])
+        ]
     except Exception as exc:
         _error(str(exc))
         raise typer.Exit(code=EXIT_ERROR) from exc
 
-    available_modules = orchestrator.get_available_attack_modules()
     if module not in available_modules:
         _error(
             f"Unknown attack module '{module}'. "
@@ -137,6 +175,7 @@ def attack(
         raise typer.Exit(code=EXIT_ERROR)
 
     try:
+        orchestrator = _load_orchestrator()(config_path=config)
         report = orchestrator.run_attack_module(module)
         out_path = _write_report(report, fmt, Path(output_dir), f"attack-{module}")
     except Exception as exc:
@@ -156,12 +195,13 @@ def defend(
 ) -> None:
     """Run all attacks with one defense enabled."""
     try:
-        orchestrator = AEGISOrchestrator(config_path=config)
+        available_defenses = [
+            str(name) for name in _load_config()(config).get("defenses", {}).get("available", [])
+        ]
     except Exception as exc:
         _error(str(exc))
         raise typer.Exit(code=EXIT_ERROR) from exc
 
-    available_defenses = orchestrator.get_available_defenses()
     if defense not in available_defenses:
         _error(
             f"Unknown defense '{defense}'. "
@@ -170,6 +210,7 @@ def defend(
         raise typer.Exit(code=EXIT_ERROR)
 
     try:
+        orchestrator = _load_orchestrator()(config_path=config)
         report = orchestrator.run_with_defense(defense)
         out_path = _write_report(report, fmt, Path(output_dir), f"defense-{defense}")
     except Exception as exc:
@@ -188,7 +229,7 @@ def matrix(
 ) -> None:
     """Comprehensive matrix run for nightly/deep security evaluation."""
     try:
-        orchestrator = AEGISOrchestrator(config_path=config)
+        orchestrator = _load_orchestrator()(config_path=config)
         reports = orchestrator.run_full_matrix()
         output_root = Path(output_dir)
         for label, report in reports.items():
@@ -208,12 +249,14 @@ def report(
     output: Annotated[str, typer.Option("--output", "-o")] = "./reports/",
 ) -> None:
     """Render JSON or HTML output from an existing SecurityReport JSON file."""
+    from pydantic import ValidationError
+
     try:
         payload = json.loads(Path(input_json).read_text(encoding="utf-8"))
         out_path = _resolve_output_path(Path(output), stem=Path(input_json).stem, fmt=fmt)
-        generator = ReportGenerator()
+        generator = _load_report_generator()()
         try:
-            report_obj = SecurityReport.model_validate(payload)
+            report_obj = _load_security_report_model().model_validate(payload)
             if fmt == "json":
                 out_path.write_text(generator.render_json(report_obj), encoding="utf-8")
             else:

@@ -21,13 +21,7 @@ name = "aegis"
 version = "1.0.0"
 source = { editable = "." }
 dependencies = [
-    { name = "chromadb" },
-    { name = "deepeval" },
-    { name = "fastmcp" },
     { name = "jinja2" },
-    { name = "langchain" },
-    { name = "langchain-community" },
-    { name = "langgraph" },
     { name = "pydantic" },
     { name = "pyyaml" },
     { name = "typer" },
@@ -40,20 +34,36 @@ dashboard = [
     { name = "streamlit" },
 ]
 dev = [
+    { name = "fastmcp" },
     { name = "jsonschema" },
+    { name = "langchain" },
+    { name = "langchain-community" },
     { name = "pyright" },
     { name = "pytest" },
     { name = "pytest-cov" },
     { name = "ruff" },
 ]
+local = [
+    { name = "fastmcp" },
+    { name = "langchain" },
+    { name = "langchain-community" },
+]
 redteam = [
     { name = "pyrit" },
+]
+research = [
+    { name = "chromadb" },
+    { name = "deepeval" },
+    { name = "langgraph" },
 ]
 
 [package.dev-dependencies]
 dev = [
     { name = "coverage" },
+    { name = "fastmcp" },
     { name = "jsonschema" },
+    { name = "langchain" },
+    { name = "langchain-community" },
     { name = "pyright" },
     { name = "pytest-cov" },
     { name = "ruff" },
@@ -61,14 +71,17 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "chromadb", specifier = "==1.5.0" },
-    { name = "deepeval", specifier = "==3.8.4" },
-    { name = "fastmcp", specifier = "==2.14.5" },
+    { name = "chromadb", marker = "extra == 'research'", specifier = "==1.5.0" },
+    { name = "deepeval", marker = "extra == 'research'", specifier = "==3.8.4" },
+    { name = "fastmcp", marker = "extra == 'dev'", specifier = "==2.14.5" },
+    { name = "fastmcp", marker = "extra == 'local'", specifier = "==2.14.5" },
     { name = "jinja2", specifier = "==3.1.6" },
     { name = "jsonschema", marker = "extra == 'dev'", specifier = "==4.26.0" },
-    { name = "langchain", specifier = "==0.3.27" },
-    { name = "langchain-community", specifier = "==0.3.31" },
-    { name = "langgraph", specifier = "==0.2.76" },
+    { name = "langchain", marker = "extra == 'dev'", specifier = "==0.3.27" },
+    { name = "langchain", marker = "extra == 'local'", specifier = "==0.3.27" },
+    { name = "langchain-community", marker = "extra == 'dev'", specifier = "==0.3.31" },
+    { name = "langchain-community", marker = "extra == 'local'", specifier = "==0.3.31" },
+    { name = "langgraph", marker = "extra == 'research'", specifier = "==0.2.76" },
     { name = "pandas", marker = "extra == 'dashboard'", specifier = ">=2.1" },
     { name = "plotly", marker = "extra == 'dashboard'", specifier = ">=5.18" },
     { name = "pydantic", specifier = "==2.12.5" },
@@ -81,12 +94,15 @@ requires-dist = [
     { name = "streamlit", marker = "extra == 'dashboard'", specifier = ">=1.30,<2.0" },
     { name = "typer", specifier = "==0.23.1" },
 ]
-provides-extras = ["dev", "redteam", "dashboard"]
+provides-extras = ["local", "research", "dev", "redteam", "dashboard"]
 
 [package.metadata.requires-dev]
 dev = [
     { name = "coverage", specifier = "==7.13.4" },
+    { name = "fastmcp", specifier = "==2.14.5" },
     { name = "jsonschema", specifier = "==4.26.0" },
+    { name = "langchain", specifier = "==0.3.27" },
+    { name = "langchain-community", specifier = "==0.3.31" },
     { name = "pyright", specifier = ">=1.1.408" },
     { name = "pytest-cov", specifier = "==7.0.0" },
     { name = "ruff", specifier = "==0.15.1" },

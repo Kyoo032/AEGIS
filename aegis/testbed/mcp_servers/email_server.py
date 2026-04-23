@@ -9,9 +9,12 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any
 
-from fastmcp import FastMCP
+try:
+    from fastmcp import FastMCP
+except ImportError:
+    FastMCP = None
 
-server = FastMCP("email")
+server = FastMCP("email") if FastMCP is not None else None
 
 _INBOX: list[dict[str, str]] = []
 _MAX_INBOX_ITEMS = 200
@@ -71,9 +74,10 @@ TOOLS: dict[str, Callable[..., object]] = {
     "clear_inbox": clear_inbox,
 }
 
-server.tool(send_email)
-server.tool(read_inbox)
-server.tool(clear_inbox)
+if server is not None:
+    server.tool(send_email)
+    server.tool(read_inbox)
+    server.tool(clear_inbox)
 
 
 def get_tools() -> dict[str, Callable[..., object]]:

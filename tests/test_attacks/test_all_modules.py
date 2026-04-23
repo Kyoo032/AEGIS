@@ -1,6 +1,8 @@
 """Unit tests for all configured attack modules."""
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from aegis.attacks import ATTACK_MODULES, get_all_modules, get_module
@@ -177,3 +179,14 @@ class TestPayloadGeneration:
         full_payloads = module.generate_payloads(FULL_TARGET_CONFIG)
         minimal_payloads = module_cls().generate_payloads(MINIMAL_TARGET_CONFIG)
         assert len(minimal_payloads) <= len(full_payloads)
+
+
+def test_configured_modules_can_load_packaged_payloads_outside_repo_checkout(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+):
+    monkeypatch.chdir(tmp_path)
+
+    for module_name in EXPECTED_MODULES:
+        payloads = get_module(module_name).generate_payloads(FULL_TARGET_CONFIG)
+        assert payloads, f"Expected packaged payloads for {module_name}"

@@ -12,9 +12,12 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
-from fastmcp import FastMCP
+try:
+    from fastmcp import FastMCP
+except ImportError:
+    FastMCP = None
 
-server = FastMCP("http")
+server = FastMCP("http") if FastMCP is not None else None
 
 _MAX_RESPONSE_BYTES = 8192
 _TIMEOUT_SECONDS = 8
@@ -119,8 +122,9 @@ TOOLS: dict[str, Callable[..., object]] = {
     "post_request": post_request,
 }
 
-server.tool(fetch_url)
-server.tool(post_request)
+if server is not None:
+    server.tool(fetch_url)
+    server.tool(post_request)
 
 
 def get_tools() -> dict[str, Callable[..., object]]:

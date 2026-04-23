@@ -10,22 +10,21 @@ import time
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from urllib.error import URLError
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
 from aegis.config import load_config
-from aegis.defenses.input_validator import InputValidatorDefense
-from aegis.defenses.mcp_integrity import MCPIntegrityDefense, build_tool_manifest
-from aegis.defenses.output_filter import OutputFilterDefense
-from aegis.defenses.permission_enforcer import PermissionEnforcerDefense
-from aegis.defenses.tool_boundary import ToolBoundaryDefense
+from aegis.optional_dependencies import OptionalDependencyError, missing_dependency_error
 from aegis.interfaces.agent import AgentInterface
 from aegis.models import AgentResponse, AttackPayload, ToolCall
-from aegis.testbed.kb import KBSessionContext, KnowledgeBaseRuntime
 from aegis.testbed.mcp_servers import load_tool_registry
 from aegis.testbed.retry import LLMCallError, call_with_retry
+
+if TYPE_CHECKING:
+    from aegis.testbed.kb.models import KBSessionContext
+    from aegis.testbed.kb.runtime import KnowledgeBaseRuntime
 
 _URL_PATTERN = re.compile(r"https?://[^\s]+", re.IGNORECASE)
 _QUOTED_PATH_PATTERN = re.compile(r"[\"']([^\"']+)[\"']")
@@ -227,12 +226,18 @@ class DefaultAgent(AgentInterface):
         """Report provider, model, and MCP server connectivity health."""
         provider_cfg = self._config.get("provider", {})
         provider_mode = str(provider_cfg.get("mode", self._config.get("model_provider", "auto")))
-        ollama_ok, ollama_note = self._check_ollama_health()
-
-        if provider_mode in {"auto", "huggingface"}:
+        if provider_mode == "offline":
+            ollama_ok, ollama_note = False, "skipped for provider mode 'offline'"
+            hf_ok, hf_note = False, "skipped for provider mode 'offline'"
+        elif provider_mode == "ollama":
+            ollama_ok, ollama_note = self._check_ollama_health()
+            hf_ok, hf_note = False, "skipped for provider mode 'ollama'"
+        elif provider_mode == "huggingface":
+            ollama_ok, ollama_note = False, "skipped for provider mode 'huggingface'"
             hf_ok, hf_note = self._check_hf_token(provider_cfg)
         else:
-            hf_ok, hf_note = False, f"skipped for provider mode '{provider_mode}'"
+            ollama_ok, ollama_note = self._check_ollama_health()
+            hf_ok, hf_note = self._check_hf_token(provider_cfg)
 
         server_checks: dict[str, dict[str, Any]] = {}
         for server_name in self._configured_servers():
@@ -403,6 +408,8 @@ class DefaultAgent(AgentInterface):
         return dict(candidate) if isinstance(candidate, dict) else {}
 
     def _tool_manifest(self) -> dict[str, str]:
+        from aegis.defenses.mcp_integrity import build_tool_manifest
+
         return build_tool_manifest(self._tool_registry)
 
     def _trim_memory(self) -> None:
@@ -418,6 +425,8 @@ class DefaultAgent(AgentInterface):
             return
         if not bool(self._security.get("kb_enabled", True)):
             return
+
+        from aegis.testbed.kb.runtime import KnowledgeBaseRuntime
 
         corpus_paths = self._string_list(self._security.get("kb_corpus_paths", []))
         fixture_paths = self._string_list(self._security.get("kb_fixture_paths", []))
@@ -447,6 +456,8 @@ class DefaultAgent(AgentInterface):
         if self._kb_runtime is None:
             self._kb_context_lines = list(self._injected_rag)
             return
+
+        from aegis.testbed.kb.models import KBSessionContext
 
         latest_user_text = self._latest_user_message(payload)
         session = KBSessionContext(
@@ -489,24 +500,25 @@ class DefaultAgent(AgentInterface):
         provider_cfg = self._config.get("provider", {})
         mode = str(provider_cfg.get("mode", self._config.get("model_provider", "auto")))
 
-        ollama_ok, ollama_note = self._check_ollama_health()
-        hf_ok, hf_note = self._check_hf_token(provider_cfg)
-
         if mode == "offline":
             return "offline", "offline mode explicitly selected"
         if mode == "ollama":
+            ollama_ok, ollama_note = self._check_ollama_health()
             if not ollama_ok:
                 raise RuntimeError(f"Ollama provider requested but unavailable: {ollama_note}")
             return "ollama", ollama_note
         if mode == "huggingface":
+            hf_ok, hf_note = self._check_hf_token(provider_cfg)
             if not hf_ok:
                 raise RuntimeError(
                     f"HuggingFace provider requested but unavailable: {hf_note}"
                 )
             return "huggingface", hf_note
 
+        ollama_ok, ollama_note = self._check_ollama_health()
         if ollama_ok:
             return "ollama", ollama_note
+        hf_ok, hf_note = self._check_hf_token(provider_cfg)
         if hf_ok:
             return "huggingface", hf_note
 
@@ -610,23 +622,37 @@ class DefaultAgent(AgentInterface):
         return tool_calls
 
     def _execute_tools_llm(self, payload: AttackPayload) -> list[ToolCall]:
-        if self._provider_name in {"ollama", "huggingface"}:
+        if not self._supports_model_tool_calling():
+            logger.info(
+                "Provider %s does not support model-driven tool calling in this adapter; "
+                "using deterministic dispatcher",
+                self._provider_name,
+            )
             return self._execute_tools_offline(payload)
         try:
             return self._execute_tools_langchain(payload)
+        except OptionalDependencyError:
+            raise
         except Exception as exc:
             logger.warning("LLM tool-calling failed, falling back to offline: %s", exc)
             return self._execute_tools_offline(payload)
 
     def _execute_tools_langchain(self, payload: AttackPayload) -> list[ToolCall]:
-        from langchain_core.messages import ToolMessage
+        try:
+            from langchain_core.messages import ToolMessage
+        except ImportError as exc:
+            raise missing_dependency_error(
+                feature="LangChain tool execution",
+                extra="local",
+                packages=["langchain", "langchain-community"],
+            ) from exc
 
         langchain_tools = self._build_langchain_tools()
         if not langchain_tools:
             return self._execute_tools_offline(payload)
 
         tool_map = {t.name: t for t in langchain_tools}
-        model = self._build_ollama_model()
+        model = self._build_tool_calling_model()
         model_with_tools = model.bind_tools(langchain_tools)
         messages = self._build_chat_messages(payload)
 
@@ -702,7 +728,14 @@ class DefaultAgent(AgentInterface):
     # ------------------------------------------------------------------
 
     def _build_langchain_tools(self) -> list:
-        from langchain_core.tools import StructuredTool
+        try:
+            from langchain_core.tools import StructuredTool
+        except ImportError as exc:
+            raise missing_dependency_error(
+                feature="LangChain tool execution",
+                extra="local",
+                packages=["langchain", "langchain-community"],
+            ) from exc
 
         tools = []
         for name, fn in self._tool_registry.items():
@@ -713,8 +746,23 @@ class DefaultAgent(AgentInterface):
                 logger.warning("Failed to build LangChain tool '%s': %s", name, exc)
         return tools
 
-    def _build_ollama_model(self):
-        from langchain_community.chat_models import ChatOllama
+    def _supports_model_tool_calling(self) -> bool:
+        return self._provider_name == "ollama"
+
+    def _build_tool_calling_model(self):
+        if self._provider_name != "ollama":
+            raise RuntimeError(
+                f"Provider '{self._provider_name}' does not support model-driven tool calling."
+            )
+
+        try:
+            from langchain_community.chat_models.ollama import ChatOllama
+        except ImportError as exc:
+            raise missing_dependency_error(
+                feature="Ollama provider",
+                extra="local",
+                packages=["langchain", "langchain-community"],
+            ) from exc
 
         provider_cfg = self._config.get("provider", {})
         model_name = str(self._config.get("model", "qwen3:4b"))
@@ -738,7 +786,14 @@ class DefaultAgent(AgentInterface):
         )
 
     def _build_chat_messages(self, payload: AttackPayload) -> list:
-        from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+        try:
+            from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+        except ImportError as exc:
+            raise missing_dependency_error(
+                feature="LangChain tool execution",
+                extra="local",
+                packages=["langchain", "langchain-community"],
+            ) from exc
 
         messages: list = []
 
@@ -928,7 +983,14 @@ class DefaultAgent(AgentInterface):
         )
 
     def _call_hf(self, prompt: str) -> str:
-        from langchain_community.llms import HuggingFaceEndpoint
+        try:
+            from langchain_community.llms import HuggingFaceEndpoint
+        except ImportError as exc:
+            raise missing_dependency_error(
+                feature="HuggingFace provider",
+                extra="local",
+                packages=["langchain", "langchain-community"],
+            ) from exc
 
         provider_cfg = self._config.get("provider", {})
         token_env = str(provider_cfg.get("hf_token_env", "HF_TOKEN"))
@@ -983,13 +1045,19 @@ class DefaultAgent(AgentInterface):
 
     def _build_defense(self, defense_name: str, config: dict[str, Any]) -> Any | None:
         if defense_name == "input_validator":
+            from aegis.defenses.input_validator import InputValidatorDefense
+
             return InputValidatorDefense(
                 strict=bool(config.get("strict", False)),
                 max_input_chars=int(config.get("max_input_chars", 8_000)),
             )
         if defense_name == "output_filter":
+            from aegis.defenses.output_filter import OutputFilterDefense
+
             return OutputFilterDefense(block_on_match=bool(config.get("block_on_match", True)))
         if defense_name == "tool_boundary":
+            from aegis.defenses.tool_boundary import ToolBoundaryDefense
+
             return ToolBoundaryDefense(
                 strict=bool(config.get("strict", True)),
                 max_calls_per_run=int(config.get("max_calls_per_run", 5)),
@@ -998,12 +1066,16 @@ class DefaultAgent(AgentInterface):
                 param_block_patterns=list(config.get("param_block_patterns") or []),
             )
         if defense_name == "mcp_integrity":
+            from aegis.defenses.mcp_integrity import MCPIntegrityDefense
+
             return MCPIntegrityDefense(
                 strict=bool(config.get("strict", True)),
                 allow_new_tools=bool(config.get("allow_new_tools", False)),
                 verify_doc_hash=bool(config.get("verify_doc_hash", True)),
             )
         if defense_name == "permission_enforcer":
+            from aegis.defenses.permission_enforcer import PermissionEnforcerDefense
+
             return PermissionEnforcerDefense(
                 mode=str(config.get("mode", "standard")),
                 allowed_tools=list(config.get("allowed_tools") or []),

@@ -3,11 +3,11 @@
 ## Assessment overview
 
 - Run date: April 21, 2026
-- Target path: single local Ollama model via [config.local_single_qwen.yaml](/home/kyo/AEGIS/aegis/config.local_single_qwen.yaml)
+- Target path: single local Ollama model via [config.local_single_qwen.yaml](../aegis/config.local_single_qwen.yaml)
 - Target model: `qwen3.5:0.8b`
 - Attack scope: 15 modules, 191 payloads
-- Baseline artifact: [baseline.json](/home/kyo/AEGIS/reports/baseline.json)
-- Raw payload log: [attack_results_0c9c3d74-756e-4230-9686-a356f80c3c69.jsonl](/home/kyo/AEGIS/reports/attack_results_0c9c3d74-756e-4230-9686-a356f80c3c69.jsonl)
+- Baseline artifact: `reports/baseline.json` (local run output, gitignored)
+- Raw payload log: `reports/attack_results_0c9c3d74-756e-4230-9686-a356f80c3c69.jsonl` (local run output, gitignored)
 
 This run was executed one model at a time on local Ollama. The target and judge both used the same local Qwen model. The validated path uses Ollama chat requests with `think: false` because Qwen thinking models can return empty `response` values on `/api/generate`.
 

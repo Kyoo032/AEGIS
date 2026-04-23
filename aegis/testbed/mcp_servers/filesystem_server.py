@@ -10,9 +10,12 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from fastmcp import FastMCP
+try:
+    from fastmcp import FastMCP
+except ImportError:
+    FastMCP = None
 
-server = FastMCP("filesystem")
+server = FastMCP("filesystem") if FastMCP is not None else None
 
 _SAFE_ROOT = Path("/tmp/aegis_fs")
 _MAX_READ_BYTES = 1_048_576
@@ -100,10 +103,11 @@ TOOLS: dict[str, Callable[..., object]] = {
     "delete_file": delete_file,
 }
 
-server.tool(read_file)
-server.tool(write_file)
-server.tool(list_directory)
-server.tool(delete_file)
+if server is not None:
+    server.tool(read_file)
+    server.tool(write_file)
+    server.tool(list_directory)
+    server.tool(delete_file)
 
 
 def get_tools() -> dict[str, Callable[..., object]]:

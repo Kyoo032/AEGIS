@@ -8,9 +8,12 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from fastmcp import FastMCP
+try:
+    from fastmcp import FastMCP
+except ImportError:
+    FastMCP = None
 
-server = FastMCP("database")
+server = FastMCP("database") if FastMCP is not None else None
 
 _DB_PATH = Path("/tmp/aegis_mcp.db")
 _CONN = sqlite3.connect(_DB_PATH, check_same_thread=False)
@@ -87,8 +90,9 @@ TOOLS: dict[str, Callable[..., object]] = {
     "query_db": query_db,
 }
 
-server.tool(insert_record)
-server.tool(query_db)
+if server is not None:
+    server.tool(insert_record)
+    server.tool(query_db)
 
 
 def get_tools() -> dict[str, Callable[..., object]]:
