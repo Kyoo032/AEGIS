@@ -5,15 +5,14 @@ Exposes: aegis scan, aegis attack, aegis defend, aegis report, aegis matrix
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any, Literal
 
 import typer
 
 if TYPE_CHECKING:
-    from aegis.models import SecurityReport
-    from aegis.orchestrator import AEGISOrchestrator as _AEGISOrchestrator
-    from aegis.reporting.report_generator import ReportGenerator as _ReportGenerator
+    from aegis.models import SecurityReport as _SecurityReport
 
 EXIT_OK = 0
 EXIT_ERROR = 1
@@ -27,6 +26,7 @@ app = typer.Typer(
     name="aegis",
     help=(
         "AEGIS — Agentic Exploit & Guardrail Investigation Suite\n\n"
+        "Start with `aegis guide` for practical examples.\n\n"
         "Exit codes:\n"
         "  0 = run completed, no successful attacks\n"
         "  1 = runtime/argument/config error\n"
@@ -34,31 +34,124 @@ app = typer.Typer(
     ),
 )
 
+GUIDE_TEXT = """AEGIS first-time workflow
+
+Recommended path: Docker Compose
+  Docker is the default way to run AEGIS because it keeps the scanner in a
+  non-root, read-only container with only the reports directory mounted writable.
+
+Before you start:
+  docker --version
+  docker compose version
+
+Mental model:
+  AEGIS sends adversarial prompts and tool-use scenarios to your target agent,
+  scores what happened, then writes reports you can inspect.
+
+First Docker run, copy and paste:
+  1. Copy operator defaults:
+     cp .env.example .env
+
+  2. Choose the Ollama model you want to test by editing .env:
+     OLLAMA_MODELS=<your-model>:<tag>
+     AEGIS_TARGET_MODEL=<your-model>:<tag>
+     # Optional: AEGIS_JUDGE_MODEL=<judge-model>:<tag>
+
+  3. Start the local Ollama service:
+     docker compose --profile local up -d ollama
+
+  4. Pull the model from .env into the Ollama container:
+     docker compose --profile local run --rm ollama-init
+
+  5. Run a baseline scan:
+     docker compose --profile local run --rm aegis scan \\
+       --format json \\
+       --output /app/reports/first-run
+
+  6. Open the generated JSON report on your host:
+     reports/first-run/baseline.json
+
+How to read the result:
+  Exit code 0 means the run completed and no successful attacks were found.
+  Exit code 2 means the run completed and AEGIS found findings to review.
+  Exit code 1 means setup, config, provider, or report rendering failed.
+
+What to do next:
+  If you want a human-readable report:
+    docker compose run --rm aegis report \\
+      --input reports/first-run/baseline.json \\
+      --format html \\
+      --output reports/first-run/baseline.html
+
+  If one area looks risky, run only that attack module:
+    docker compose --profile local run --rm aegis attack \\
+      --module llm01_prompt_inject \\
+      --output /app/reports/prompt-injection
+
+  If you want to test one guardrail:
+    docker compose --profile local run --rm aegis defend \\
+      --defense tool_boundary \\
+      --output /app/reports/tool-boundary
+
+  If you want a full baseline-vs-defense comparison:
+    docker compose --profile local run --rm aegis matrix \\
+      --output /app/reports/defense-matrix
+
+Local Python fallback:
+  Use this only when you intentionally want to run outside Docker:
+    uv sync --dev
+    ollama pull <your-model>:<tag>
+    export AEGIS_TARGET_MODEL=<your-model>:<tag>
+    uv run aegis scan \\
+      --output reports/first-run
+
+Command map:
+  guide   Shows this first-time workflow.
+  scan    Runs the baseline attack suite with no extra defense.
+  attack  Runs one attack module for focused debugging.
+  defend  Runs all attacks with one named defense enabled.
+  matrix  Compares baseline, single defenses, and layered defenses.
+  report  Converts an existing JSON report or matrix summary to JSON or HTML.
+
+Important options:
+  --config, -c   YAML config path. Overrides AEGIS_CONFIG_PATH.
+  --format, -f   Output format: json or html.
+  --output, -o   Report/artifact directory, or output file for `report`.
+  --module, -m   Attack module name for `attack`.
+  --defense, -d  Defense name for `defend`.
+  --input, -i    Existing JSON report or matrix summary for `report`.
+
+Need names for modules or defenses?
+  Run an invalid name once and AEGIS will print the available choices:
+    docker compose run --rm aegis attack --module does_not_exist
+    docker compose run --rm aegis defend --defense does_not_exist
+"""
+
 
 def _load_orchestrator() -> type[Any]:
     global AEGISOrchestrator
     if AEGISOrchestrator is None:
-        from aegis.orchestrator import AEGISOrchestrator as orchestrator_cls
+        from aegis import orchestrator as orchestrator_module
 
-        AEGISOrchestrator = orchestrator_cls
+        AEGISOrchestrator = orchestrator_module.AEGISOrchestrator
     return AEGISOrchestrator
 
 
 def _load_report_generator() -> type[Any]:
     global ReportGenerator
     if ReportGenerator is None:
-        from aegis.reporting.report_generator import ReportGenerator as generator_cls
+        from aegis.reporting import report_generator as report_generator_module
 
-        ReportGenerator = generator_cls
+        ReportGenerator = report_generator_module.ReportGenerator
     return ReportGenerator
 
 
 def _load_security_report_model() -> type[Any]:
     global SecurityReport
     if SecurityReport is None:
-        from aegis.models import SecurityReport as model_cls
+        from aegis import models as models_module
 
-        SecurityReport = model_cls
+        SecurityReport = models_module.SecurityReport
     return SecurityReport
 
 
@@ -68,7 +161,36 @@ def _load_config() -> Any:
     return load_config
 
 
-def _write_report(report: "SecurityReport", fmt: str, output_dir: Path, stem: str) -> Path:
+def _resolve_config_path(config: str | None) -> str | None:
+    return config or os.environ.get("AEGIS_CONFIG_PATH")
+
+
+def _resolve_reports_dir(
+    output_dir: str | None,
+    configured_output_dir: str | None = None,
+) -> Path:
+    return Path(
+        output_dir
+        or os.environ.get("AEGIS_REPORTS_DIR")
+        or configured_output_dir
+        or "./reports"
+    )
+
+
+def _build_orchestrator(config: str | None, output_dir: str | None) -> tuple[Any, Path]:
+    orchestrator = _load_orchestrator()(config_path=_resolve_config_path(config))
+    configured_output_dir = None
+    if isinstance(getattr(orchestrator, "config", None), dict):
+        configured_output_dir = str(
+            orchestrator.config.get("reporting", {}).get("output_dir") or ""
+        )
+    reports_dir = _resolve_reports_dir(output_dir, configured_output_dir)
+    if isinstance(getattr(orchestrator, "config", None), dict):
+        orchestrator.config.setdefault("reporting", {})["output_dir"] = str(reports_dir)
+    return orchestrator, reports_dir
+
+
+def _write_report(report: _SecurityReport, fmt: str, output_dir: Path, stem: str) -> Path:
     output_dir.mkdir(parents=True, exist_ok=True)
     generator = _load_report_generator()()
     if fmt == "json":
@@ -81,11 +203,11 @@ def _write_report(report: "SecurityReport", fmt: str, output_dir: Path, stem: st
     return out_path
 
 
-def _vuln_exit_code(report: SecurityReport) -> int:
+def _vuln_exit_code(report: _SecurityReport) -> int:
     return EXIT_VULNS_FOUND if report.total_successful > 0 else EXIT_OK
 
 
-def _matrix_exit_code(reports: dict[str, SecurityReport]) -> int:
+def _matrix_exit_code(reports: dict[str, _SecurityReport]) -> int:
     return EXIT_VULNS_FOUND if any(r.total_successful > 0 for r in reports.values()) else EXIT_OK
 
 
@@ -133,16 +255,39 @@ def _render_matrix_html(matrix_payload: dict[str, object]) -> str:
 
 
 @app.command()
+def guide() -> None:
+    """Show practical CLI workflows, options, and exit-code guidance."""
+    typer.echo(GUIDE_TEXT)
+
+
+@app.command()
 def scan(
-    config: Annotated[str | None, typer.Option("--config", "-c")] = None,
-    fmt: Annotated[Literal["json", "html"], typer.Option("--format", "-f")] = "json",
-    output_dir: Annotated[str, typer.Option("--output", "-o")] = "./reports",
+    config: Annotated[
+        str | None,
+        typer.Option(
+            "--config",
+            "-c",
+            help="Path to the YAML config file. Overrides AEGIS_CONFIG_PATH.",
+        ),
+    ] = None,
+    fmt: Annotated[
+        Literal["json", "html"],
+        typer.Option("--format", "-f", help="Rendered report format."),
+    ] = "json",
+    output_dir: Annotated[
+        str | None,
+        typer.Option(
+            "--output",
+            "-o",
+            help="Directory for scan artifacts and the rendered baseline report.",
+        ),
+    ] = None,
 ) -> None:
     """Fast baseline scan for PR/pre-commit checks (single run, no defense matrix)."""
     try:
-        orchestrator = _load_orchestrator()(config_path=config)
+        orchestrator, reports_dir = _build_orchestrator(config, output_dir)
         report = orchestrator.run_baseline()
-        out_path = _write_report(report, fmt, Path(output_dir), "baseline")
+        out_path = _write_report(report, fmt, reports_dir, "baseline")
     except Exception as exc:
         _error(str(exc))
         raise typer.Exit(code=EXIT_ERROR) from exc
@@ -153,15 +298,42 @@ def scan(
 
 @app.command()
 def attack(
-    module: Annotated[str, typer.Option("--module", "-m")],
-    config: Annotated[str | None, typer.Option("--config", "-c")] = None,
-    fmt: Annotated[Literal["json", "html"], typer.Option("--format", "-f")] = "json",
-    output_dir: Annotated[str, typer.Option("--output", "-o")] = "./reports",
+    module: Annotated[
+        str,
+        typer.Option(
+            "--module",
+            "-m",
+            help="Configured attack module to run, such as llm01_prompt_inject.",
+        ),
+    ],
+    config: Annotated[
+        str | None,
+        typer.Option(
+            "--config",
+            "-c",
+            help="Path to the YAML config file. Overrides AEGIS_CONFIG_PATH.",
+        ),
+    ] = None,
+    fmt: Annotated[
+        Literal["json", "html"],
+        typer.Option("--format", "-f", help="Rendered report format."),
+    ] = "json",
+    output_dir: Annotated[
+        str | None,
+        typer.Option(
+            "--output",
+            "-o",
+            help="Directory for attack artifacts and the rendered module report.",
+        ),
+    ] = None,
 ) -> None:
     """Run a specific attack module."""
     try:
         available_modules = [
-            str(name) for name in _load_config()(config).get("attacks", {}).get("modules", [])
+            str(name)
+            for name in _load_config()(_resolve_config_path(config)).get("attacks", {}).get(
+                "modules", []
+            )
         ]
     except Exception as exc:
         _error(str(exc))
@@ -175,9 +347,14 @@ def attack(
         raise typer.Exit(code=EXIT_ERROR)
 
     try:
-        orchestrator = _load_orchestrator()(config_path=config)
+        orchestrator, reports_dir = _build_orchestrator(config, output_dir)
         report = orchestrator.run_attack_module(module)
-        out_path = _write_report(report, fmt, Path(output_dir), f"attack-{module}")
+        out_path = _write_report(
+            report,
+            fmt,
+            reports_dir,
+            f"attack-{module}",
+        )
     except Exception as exc:
         _error(str(exc))
         raise typer.Exit(code=EXIT_ERROR) from exc
@@ -188,15 +365,42 @@ def attack(
 
 @app.command()
 def defend(
-    defense: Annotated[str, typer.Option("--defense", "-d")],
-    config: Annotated[str | None, typer.Option("--config", "-c")] = None,
-    fmt: Annotated[Literal["json", "html"], typer.Option("--format", "-f")] = "json",
-    output_dir: Annotated[str, typer.Option("--output", "-o")] = "./reports",
+    defense: Annotated[
+        str,
+        typer.Option(
+            "--defense",
+            "-d",
+            help="Configured defense to enable, such as input_validator.",
+        ),
+    ],
+    config: Annotated[
+        str | None,
+        typer.Option(
+            "--config",
+            "-c",
+            help="Path to the YAML config file. Overrides AEGIS_CONFIG_PATH.",
+        ),
+    ] = None,
+    fmt: Annotated[
+        Literal["json", "html"],
+        typer.Option("--format", "-f", help="Rendered report format."),
+    ] = "json",
+    output_dir: Annotated[
+        str | None,
+        typer.Option(
+            "--output",
+            "-o",
+            help="Directory for defense artifacts and the rendered defense report.",
+        ),
+    ] = None,
 ) -> None:
     """Run all attacks with one defense enabled."""
     try:
         available_defenses = [
-            str(name) for name in _load_config()(config).get("defenses", {}).get("available", [])
+            str(name)
+            for name in _load_config()(_resolve_config_path(config)).get("defenses", {}).get(
+                "available", []
+            )
         ]
     except Exception as exc:
         _error(str(exc))
@@ -210,9 +414,14 @@ def defend(
         raise typer.Exit(code=EXIT_ERROR)
 
     try:
-        orchestrator = _load_orchestrator()(config_path=config)
+        orchestrator, reports_dir = _build_orchestrator(config, output_dir)
         report = orchestrator.run_with_defense(defense)
-        out_path = _write_report(report, fmt, Path(output_dir), f"defense-{defense}")
+        out_path = _write_report(
+            report,
+            fmt,
+            reports_dir,
+            f"defense-{defense}",
+        )
     except Exception as exc:
         _error(str(exc))
         raise typer.Exit(code=EXIT_ERROR) from exc
@@ -223,15 +432,31 @@ def defend(
 
 @app.command()
 def matrix(
-    config: Annotated[str | None, typer.Option("--config", "-c")] = None,
-    fmt: Annotated[Literal["json", "html"], typer.Option("--format", "-f")] = "json",
-    output_dir: Annotated[str, typer.Option("--output", "-o")] = "./reports",
+    config: Annotated[
+        str | None,
+        typer.Option(
+            "--config",
+            "-c",
+            help="Path to the YAML config file. Overrides AEGIS_CONFIG_PATH.",
+        ),
+    ] = None,
+    fmt: Annotated[
+        Literal["json", "html"],
+        typer.Option("--format", "-f", help="Rendered report format for each scenario."),
+    ] = "json",
+    output_dir: Annotated[
+        str | None,
+        typer.Option(
+            "--output",
+            "-o",
+            help="Directory for matrix artifacts, scenario reports, and summary JSON.",
+        ),
+    ] = None,
 ) -> None:
     """Comprehensive matrix run for nightly/deep security evaluation."""
     try:
-        orchestrator = _load_orchestrator()(config_path=config)
+        orchestrator, output_root = _build_orchestrator(config, output_dir)
         reports = orchestrator.run_full_matrix()
-        output_root = Path(output_dir)
         for label, report in reports.items():
             _write_report(report, fmt, output_root, label)
     except Exception as exc:
@@ -244,16 +469,37 @@ def matrix(
 
 @app.command()
 def report(
-    input_json: Annotated[str, typer.Option("--input", "-i")],
-    fmt: Annotated[Literal["json", "html"], typer.Option("--format", "-f")] = "html",
-    output: Annotated[str, typer.Option("--output", "-o")] = "./reports/",
+    input_json: Annotated[
+        str,
+        typer.Option(
+            "--input",
+            "-i",
+            help="Existing SecurityReport JSON or matrix summary JSON to render.",
+        ),
+    ],
+    fmt: Annotated[
+        Literal["json", "html"],
+        typer.Option("--format", "-f", help="Rendered report format."),
+    ] = "html",
+    output: Annotated[
+        str | None,
+        typer.Option(
+            "--output",
+            "-o",
+            help="Output file path, or directory when no filename suffix is provided.",
+        ),
+    ] = None,
 ) -> None:
     """Render JSON or HTML output from an existing SecurityReport JSON file."""
     from pydantic import ValidationError
 
     try:
         payload = json.loads(Path(input_json).read_text(encoding="utf-8"))
-        out_path = _resolve_output_path(Path(output), stem=Path(input_json).stem, fmt=fmt)
+        out_path = _resolve_output_path(
+            Path(output) if output else _resolve_reports_dir(None),
+            stem=Path(input_json).stem,
+            fmt=fmt,
+        )
         generator = _load_report_generator()()
         try:
             report_obj = _load_security_report_model().model_validate(payload)

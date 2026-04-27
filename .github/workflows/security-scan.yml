@@ -48,17 +48,46 @@ jobs:
           AEGIS_PROVIDER_MODE: "offline"
         run: |
           SCAN_TYPE="${{ inputs.scan_type || 'baseline' }}"
-          CONFIG_ARG=""
+          OUTPUT_DIR="reports/ci_scan_results"
+          mkdir -p "${OUTPUT_DIR}"
+
+          CONFIG_ARGS=()
           if [ -n "${{ inputs.config }}" ]; then
-            CONFIG_ARG="--config ${{ inputs.config }}"
+            CONFIG_ARGS+=(--config "${{ inputs.config }}")
           fi
 
           # Exit code 2 = vulnerabilities found (expected)
-          .venv/bin/aegis scan \
-            --scan-type "${SCAN_TYPE}" \
-            --format json \
-            ${CONFIG_ARG} \
-            --output reports/ci_scan_results.json || true
+          set +e
+          if [ "${SCAN_TYPE}" = "matrix" ]; then
+            .venv/bin/aegis matrix \
+              --format json \
+              "${CONFIG_ARGS[@]}" \
+              --output "${OUTPUT_DIR}"
+          else
+            .venv/bin/aegis scan \
+              --format json \
+              "${CONFIG_ARGS[@]}" \
+              --output "${OUTPUT_DIR}"
+          fi
+          status=$?
+          set -e
+
+          if [ "${status}" -ne 0 ] && [ "${status}" -ne 2 ]; then
+            exit "${status}"
+          fi
+
+          if [ "${SCAN_TYPE}" = "matrix" ]; then
+            SUMMARY_PATH="$(find "${OUTPUT_DIR}" -maxdepth 1 -name 'day89_defense_matrix_*.json' | sort | tail -n 1)"
+            if [ -z "${SUMMARY_PATH}" ]; then
+              echo "::error::Matrix run did not produce a defense matrix summary"
+              exit 1
+            fi
+            cp "${SUMMARY_PATH}" reports/ci_scan_results.json
+          else
+            cp "${OUTPUT_DIR}/baseline.json" reports/ci_scan_results.json
+          fi
+
+          echo "scan_type=${SCAN_TYPE}" >> "$GITHUB_OUTPUT"
 
       - name: Generate HTML report
         if: always() && hashFiles('reports/ci_scan_results.json') != ''
@@ -73,17 +102,25 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: aegis-scan-results
-          path: reports/ci_scan_*
+          path: |
+            reports/ci_scan_results.json
+            reports/ci_scan_results.html
+            reports/ci_scan_results/
           retention-days: 90
 
       - name: Check for critical findings
         id: check_critical
         if: always() && hashFiles('reports/ci_scan_results.json') != ''
         run: |
+          REPORT_PATH="reports/ci_scan_results.json"
+          if [ "${{ steps.scan.outputs.scan_type }}" = "matrix" ] && [ -f reports/ci_scan_results/baseline.json ]; then
+            REPORT_PATH="reports/ci_scan_results/baseline.json"
+          fi
+
           CRITICAL=$(python3 -c "
           import json, sys
           try:
-              data = json.load(open('reports/ci_scan_results.json'))
+              data = json.load(open('${REPORT_PATH}'))
               findings = data.get('findings', [])
               critical = [f for f in findings if f.get('severity') == 'critical']
               print(len(critical))
@@ -104,19 +141,33 @@ jobs:
             let summary = '### AEGIS Security Scan Results\n\n';
             try {
               const data = JSON.parse(fs.readFileSync('reports/ci_scan_results.json', 'utf8'));
-              const asr = (data.attack_success_rate * 100).toFixed(1);
-              const total = data.total_attacks || 0;
-              const findings = (data.findings || []).length;
-              const critical = (data.findings || []).filter(f => f.severity === 'critical').length;
-              summary += `| Metric | Value |\n|--------|-------|\n`;
-              summary += `| Total Attacks | ${total} |\n`;
-              summary += `| Attack Success Rate | ${asr}% |\n`;
-              summary += `| Findings | ${findings} |\n`;
-              summary += `| Critical | ${critical} |\n\n`;
-              if (critical > 0) {
-                summary += '⚠️ **Critical findings detected — review required.**\n';
+              const scanType = '${{ steps.scan.outputs.scan_type }}';
+              summary += `Scan type: \`${scanType}\`\n\n`;
+
+              if (data.scenarios) {
+                const baseline = Number(data.baseline || 0);
+                const scenarios = Object.keys(data.scenarios || {});
+                const errors = (data.errors || []).length;
+                summary += `| Metric | Value |\n|--------|-------|\n`;
+                summary += `| Scenarios | ${scenarios.length} |\n`;
+                summary += `| Baseline ASR | ${(baseline * 100).toFixed(1)}% |\n`;
+                summary += `| Matrix Errors | ${errors} |\n\n`;
+                summary += 'Matrix summary artifact uploaded with the workflow run.\n';
               } else {
-                summary += '✅ No critical findings.\n';
+                const asr = (Number(data.attack_success_rate || 0) * 100).toFixed(1);
+                const total = data.total_attacks || 0;
+                const findings = (data.findings || []).length;
+                const critical = (data.findings || []).filter(f => f.severity === 'critical').length;
+                summary += `| Metric | Value |\n|--------|-------|\n`;
+                summary += `| Total Attacks | ${total} |\n`;
+                summary += `| Attack Success Rate | ${asr}% |\n`;
+                summary += `| Findings | ${findings} |\n`;
+                summary += `| Critical | ${critical} |\n\n`;
+                if (critical > 0) {
+                  summary += '⚠️ **Critical findings detected — review required.**\n';
+                } else {
+                  summary += '✅ No critical findings.\n';
+                }
               }
             } catch (e) {
               summary += `⚠️ Could not parse scan results: ${e.message}\n`;

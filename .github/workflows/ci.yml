@@ -129,3 +129,57 @@ jobs:
           assert validate_files('matrix', [str(matrix_path)]) == 0
           assert validate_files('report', [str(report_path)]) == 0
           PY
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build Docker images
+        run: docker compose build aegis dashboard
+
+      - name: Run scanner smoke test
+        run: |
+          set +e
+          docker compose run --rm \
+            -e AEGIS_PROVIDER_MODE=offline \
+            -e AEGIS_CONFIG_PATH=/app/aegis/config.yaml \
+            aegis attack \
+            --module llm01_prompt_inject \
+            --output /app/reports/ci-docker-smoke
+          status=$?
+          set -e
+
+          if [ "$status" -ne 0 ] && [ "$status" -ne 2 ]; then
+            exit "$status"
+          fi
+
+          test -f reports/ci-docker-smoke/attack-llm01_prompt_inject.json
+
+      - name: Start dashboard smoke test
+        run: docker compose --profile dashboard up -d dashboard
+
+      - name: Wait for dashboard health
+        run: |
+          for _ in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8501/_stcore/health >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+
+          docker compose logs --tail=200 dashboard
+          exit 1
+
+      - name: Upload Docker smoke artifact
+        if: always() && hashFiles('reports/ci-docker-smoke/*') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: aegis-docker-smoke
+          path: reports/ci-docker-smoke/*
+          retention-days: 30
+
+      - name: Shutdown Docker services
+        if: always()
+        run: docker compose --profile dashboard down --volumes --remove-orphans

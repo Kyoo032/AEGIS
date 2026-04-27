@@ -35,6 +35,9 @@ datasets/kb/
 reports/*.json
 reports/*.html
 reports/*.jsonl
+reports/**/*.json
+reports/**/*.html
+reports/**/*.jsonl
 
 # Keep sample reports and GRC assessment
 !reports/sample_baseline_report.json

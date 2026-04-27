@@ -256,6 +256,16 @@ def load_config(config_path: str | Path | None = None) -> dict[str, Any]:
     if ollama_url:
         merged["testbed"]["provider"]["ollama_base_url"] = ollama_url
 
+    target_model = os.environ.get("AEGIS_TARGET_MODEL") or os.environ.get("AEGIS_MODEL")
+    fallback_model = os.environ.get("AEGIS_FALLBACK_MODEL") or target_model
+    judge_model = os.environ.get("AEGIS_JUDGE_MODEL") or target_model
+    if target_model:
+        merged["testbed"]["model"] = target_model
+    if fallback_model:
+        merged["testbed"]["fallback_model"] = fallback_model
+    if judge_model:
+        merged["evaluation"]["judge_model"] = judge_model
+
     _validate_nested(merged, path)
 
     logger.info("AEGIS config loaded successfully from %s", path)

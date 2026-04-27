@@ -73,6 +73,29 @@ def test_scan_command_writes_json_report(monkeypatch, tmp_path):
     assert payload["report_id"] == "baseline"
 
 
+def test_scan_output_dir_controls_orchestrator_artifacts(monkeypatch, tmp_path):
+    cli = _reload_cli_module()
+    observed = {}
+
+    class FakeOrchestrator:
+        def __init__(self, config_path=None):
+            self.config_path = config_path
+            self.config = {"reporting": {"output_dir": "configured-reports"}}
+
+        def run_baseline(self) -> SecurityReport:
+            observed["output_dir"] = self.config["reporting"]["output_dir"]
+            return _sample_report("baseline")
+
+    monkeypatch.setattr(cli, "AEGISOrchestrator", FakeOrchestrator)
+
+    runner = CliRunner()
+    result = runner.invoke(cli.app, ["scan", "-o", str(tmp_path)])
+
+    assert result.exit_code == 2
+    assert observed["output_dir"] == str(tmp_path)
+    assert (tmp_path / "baseline.json").exists()
+
+
 def test_report_command_renders_html(tmp_path):
     cli = _reload_cli_module()
     json_path = tmp_path / "in.json"
@@ -109,6 +132,32 @@ def test_report_command_renders_json(tmp_path):
     assert result.exit_code == 0
     parsed = json.loads(out_path.read_text(encoding="utf-8"))
     assert parsed["report_id"] == "for-json"
+
+
+def test_guide_command_shows_practical_workflows():
+    cli = _reload_cli_module()
+
+    runner = CliRunner()
+    result = runner.invoke(cli.app, ["guide"])
+
+    assert result.exit_code == 0
+    assert "AEGIS first-time workflow" in result.output
+    assert "Recommended path: Docker Compose" in result.output
+    assert "Mental model" in result.output
+    assert "First Docker run, copy and paste" in result.output
+    assert "docker compose --profile local run --rm aegis scan" in result.output
+    assert "What to do next" in result.output
+
+
+def test_scan_help_explains_options():
+    cli = _reload_cli_module()
+
+    runner = CliRunner()
+    result = runner.invoke(cli.app, ["scan", "--help"])
+
+    assert result.exit_code == 0
+    assert "Path to the YAML config file" in result.output
+    assert "Directory for scan artifacts" in result.output
 
 
 def test_attack_unknown_module_lists_available(monkeypatch):
