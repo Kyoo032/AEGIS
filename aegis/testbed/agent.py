@@ -16,14 +16,13 @@ from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
 from aegis.config import load_config
-from aegis.optional_dependencies import OptionalDependencyError, missing_dependency_error
 from aegis.interfaces.agent import AgentInterface
 from aegis.models import AgentResponse, AttackPayload, ToolCall
+from aegis.optional_dependencies import OptionalDependencyError, missing_dependency_error
 from aegis.testbed.mcp_servers import load_tool_registry
 from aegis.testbed.retry import LLMCallError, call_with_retry
 
 if TYPE_CHECKING:
-    from aegis.testbed.kb.models import KBSessionContext
     from aegis.testbed.kb.runtime import KnowledgeBaseRuntime
 
 _URL_PATTERN = re.compile(r"https?://[^\s]+", re.IGNORECASE)

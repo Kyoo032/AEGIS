@@ -1,8 +1,69 @@
+name: aegis
+
 services:
+  aegis:
+    build:
+      context: .
+      target: runtime
+    image: aegis-runtime:local
+    init: true
+    restart: "no"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /home/aegis/.cache
+    environment:
+      AEGIS_CONFIG_PATH: ${AEGIS_CONFIG_PATH:-/app/aegis/config.local_single_qwen.yaml}
+      AEGIS_REPORTS_DIR: /app/reports
+      AEGIS_PROVIDER_MODE: ${AEGIS_PROVIDER_MODE:-}
+      AEGIS_TARGET_MODEL: ${AEGIS_TARGET_MODEL:-}
+      AEGIS_FALLBACK_MODEL: ${AEGIS_FALLBACK_MODEL:-}
+      AEGIS_JUDGE_MODEL: ${AEGIS_JUDGE_MODEL:-}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
+      HF_TOKEN: ${HF_TOKEN:-}
+    volumes:
+      - ./reports:/app/reports
+    depends_on:
+      ollama:
+        condition: service_healthy
+        required: false
+    command:
+      - scan
+
+  dashboard:
+    build:
+      context: .
+      target: dashboard
+    image: aegis-dashboard:local
+    init: true
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /home/aegis/.cache
+      - /home/aegis/.streamlit
+    environment:
+      AEGIS_REPORTS_DIR: /app/reports
+    ports:
+      - "${AEGIS_DASHBOARD_BIND_ADDRESS:-127.0.0.1}:${AEGIS_DASHBOARD_PORT:-8501}:8501"
+    volumes:
+      - ./reports:/app/reports:ro
+    profiles:
+      - dashboard
+
   ollama:
     image: ollama/ollama:latest
-    ports:
-      - "11434:11434"
+    init: true
+    restart: unless-stopped
+    tty: true
     volumes:
       - ollama_data:/root/.ollama
     healthcheck:
@@ -10,57 +71,29 @@ services:
       interval: 15s
       timeout: 5s
       retries: 5
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
-        limits:
-          memory: 4G
+    profiles:
+      - local
 
-  ollama-pull:
+  ollama-init:
     image: ollama/ollama:latest
-    entrypoint: ["/bin/sh", "-c", "ollama pull qwen3:4b && ollama pull qwen3:1.7b"]
+    init: true
+    restart: "no"
+    entrypoint:
+      - /bin/sh
+      - -lc
+      - |
+        set -eu
+        for model in ${OLLAMA_MODELS:-qwen3.5:0.8b}; do
+          ollama pull "$$model"
+        done
     environment:
-      - OLLAMA_HOST=http://ollama:11434
+      OLLAMA_HOST: http://ollama:11434
+      OLLAMA_MODELS: ${OLLAMA_MODELS:-qwen3.5:0.8b}
     depends_on:
       ollama:
         condition: service_healthy
     profiles:
-      - scan
-
-  aegis:
-    build:
-      context: .
-      target: runtime
-    command: ["scan"]
-    volumes:
-      - ./reports:/app/reports
-    environment:
-      - OLLAMA_BASE_URL=http://ollama:11434
-      - AEGIS_REPORTS_DIR=/app/reports
-      # Optional: set to "local" (default) or "api"
-      # - AEGIS_PROVIDER_MODE=local
-    depends_on:
-      ollama-pull:
-        condition: service_completed_successfully
-    profiles:
-      - scan
-
-  dashboard:
-    build:
-      context: .
-      target: dashboard
-    ports:
-      - "8501:8501"
-    volumes:
-      - ./reports:/app/reports:ro
-    environment:
-      - AEGIS_REPORTS_DIR=/app/reports
-    profiles:
-      - dashboard
+      - local
 
 volumes:
   ollama_data:

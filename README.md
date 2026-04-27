@@ -13,7 +13,7 @@
 [![Attack Modules](https://img.shields.io/badge/attacks-15-orange)]()
 [![Payloads](https://img.shields.io/badge/payloads-191-red)]()
 
-[Quick Start](#-quick-start) · [How It Works](#-how-it-works) · [Attack Surface](#-attack-surface) · [Integrate Your Model](#-integrate-your-own-model) · [Docs](#-documentation)
+[Quick Start](#-quick-start) · [Workflow](#how-aegis-works) · [CLI Usage](#cli-usage) · [Attack Surface](#-attack-surface) · [Integrate Your Model](#-integrate-your-own-model) · [Docs](#-documentation)
 
 </div>
 
@@ -25,7 +25,26 @@ AEGIS is a **red-team framework for LLM agents**. It fires adversarial payloads 
 
 It is designed for the reality of modern agentic systems: tool use, MCP servers, RAG, multi-turn conversations, and the gap between "the model refuses" and "the agent still does the dangerous thing."
 
-> **Latest validation:** `qwen3.5:0.8b` via Ollama — 191 payloads, **75.39% overall ASR** (Attack Success Rate). See [baseline.json](reports/baseline.json).
+> **Latest validation:** the Docker + Ollama path was tested with `qwen3.5:0.8b` — 191 payloads, **75.39% overall ASR** (Attack Success Rate). See [baseline.json](reports/baseline.json).
+
+## How AEGIS Works
+
+```mermaid
+flowchart LR
+    U["You choose a model"] --> E[".env or config.yaml"]
+    E --> D["Docker Compose"]
+    D --> O["Ollama or provider"]
+    D --> A["AEGIS scanner"]
+    A --> P["Attack payloads"]
+    P --> T["Testbed agent"]
+    T --> O
+    O --> S["Rule scorer + LLM judge"]
+    S --> R["JSON / HTML reports"]
+    R --> N["Fix, harden, rerun"]
+    N --> A
+```
+
+**In plain terms:** choose a model, run a scan, open the report, fix the risky behavior, then rerun AEGIS to compare results.
 
 ---
 
@@ -34,7 +53,7 @@ It is designed for the reality of modern agentic systems: tool use, MCP servers,
 - **15 attack modules** covering goal hijack, tool misuse, supply chain, code exec, memory poisoning, MCP injection, cross-lingual prompts, and more.
 - **5 defense modules** for layered hardening — input validation, output filtering, tool boundaries, MCP integrity, permission enforcement.
 - **Dual-scorer evaluation:** deterministic rule-based scoring + LLM-judge confirmation.
-- **Low-VRAM friendly:** validated path runs one model on consumer hardware via Ollama.
+- **Low-VRAM friendly:** the local path can run one Ollama model for both target and judge on consumer hardware.
 - **Pluggable providers:** Ollama, Hugging Face, or offline fixtures.
 - **Structured reports:** JSON + HTML, with optional Streamlit dashboard.
 - **CI-ready:** exit code `2` when vulnerabilities are found, so pipelines can fail loudly.
@@ -43,69 +62,309 @@ It is designed for the reality of modern agentic systems: tool use, MCP servers,
 
 ## 🚀 Quick Start
 
+**For most users, use Docker.** It avoids local Python setup and keeps the scanner in a non-root, read-only container. The only writable mount is `./reports`, where scan output is saved.
+
 ### Prerequisites
 
-- Python **3.11+**
-- [`uv`](https://github.com/astral-sh/uv) package manager
-- [`ollama`](https://ollama.com) running locally (for the validated path)
+- Docker Desktop or Docker Engine with Docker Compose v2
+- Enough disk space for the runtime image and whichever local model you choose
 
-### Install
+### Install And Run With Docker
+
+**1. Clone the repo and copy the example environment file.**
 
 ```bash
 git clone https://github.com/Kyoo032/AEGIS.git
 cd AEGIS
+cp .env.example .env
+```
+
+**2. Choose the model to test.** Edit `.env`:
+
+```dotenv
+OLLAMA_MODELS=<your-model>:<tag>
+AEGIS_TARGET_MODEL=<your-model>:<tag>
+# Optional: use a separate judge model
+# AEGIS_JUDGE_MODEL=<judge-model>:<tag>
+```
+
+**3. Start the internal Ollama service and pull the model from `.env`.**
+
+```bash
+docker compose --profile local up -d ollama
+docker compose --profile local run --rm ollama-init
+```
+
+**4. Run the baseline scan.**
+
+```bash
+docker compose --profile local run --rm aegis scan \
+  --format json \
+  --output /app/reports/first-run
+```
+
+**5. Open the report on your host.**
+
+The first report is written to `reports/first-run/baseline.json`.
+
+| Result | Meaning |
+|---|---|
+| Exit code `0` | Scan completed and no successful attacks were found. |
+| Exit code `2` | Scan completed and vulnerabilities were found. Review the report. |
+| Exit code `1` | Setup, config, provider, or report rendering failed. |
+
+**First command to remember:** `docker compose --profile local run --rm aegis guide`
+
+### Docker CLI Commands
+
+Use these after the first scan:
+
+```bash
+docker compose --profile local run --rm aegis guide
+docker compose --profile local run --rm aegis attack --module asi_dynamic_cloak
+docker compose --profile local run --rm aegis defend --defense input_validator
+docker compose --profile local run --rm aegis matrix --output /app/reports/defense-matrix
+docker compose run --rm aegis report \
+  --input reports/first-run/baseline.json \
+  --format html \
+  --output reports/first-run/baseline.html
+```
+
+### Local Python Fallback
+
+Use this only when you intentionally want to run outside Docker:
+
+```bash
 uv sync --dev
-```
-
-### Run the validated low-VRAM scan
-
-```bash
-# 1. Pull the test model
-ollama pull qwen3.5:0.8b
-
-# 2. Launch the full baseline scan (15 modules × ~13 payloads)
+ollama pull <your-model>:<tag>
+export AEGIS_TARGET_MODEL=<your-model>:<tag>
 uv run aegis scan \
-    --config aegis/config.local_single_qwen.yaml \
-    --format json \
-    --output reports
+  --format json \
+  --output reports/local-model
 ```
 
-The run writes a timestamped artifact into `reports/` and exits with code `2` if any payload succeeded.
+## CLI Usage
 
-### Other commands
+**Use Docker Compose by default.** These help commands are the fastest way to discover options without leaving the terminal:
 
 ```bash
-uv run aegis scan                               # Full scan using default config
-uv run aegis attack --module asi_dynamic_cloak  # Single attack module
-uv run aegis defend --defense input_validator   # Scan with one defense active
-uv run aegis matrix                             # Baseline vs. defense matrix
-uv run aegis report --format html               # Render HTML report
+docker compose --profile local run --rm aegis guide
+docker compose --profile local run --rm aegis --help
+docker compose --profile local run --rm aegis scan --help
+docker compose --profile local run --rm aegis attack --help
+docker compose --profile local run --rm aegis defend --help
+docker compose --profile local run --rm aegis matrix --help
+docker compose run --rm aegis report --help
 ```
+
+For a first-time user, start with `docker compose --profile local run --rm aegis guide`. It explains the mental model, gives a copy/paste first scan, shows where the report is written, and suggests the next command based on what you want to investigate.
+
+### Which Command Should I Use?
+
+| Goal | Command |
+|---|---|
+| **I am new and need the guided path.** | `docker compose --profile local run --rm aegis guide` |
+| **Run the full baseline attack suite.** | `docker compose --profile local run --rm aegis scan` |
+| **Debug one attack category.** | `docker compose --profile local run --rm aegis attack --module <name>` |
+| **Test one guardrail.** | `docker compose --profile local run --rm aegis defend --defense <name>` |
+| **Compare multiple defenses.** | `docker compose --profile local run --rm aegis matrix` |
+| **Convert JSON to HTML.** | `docker compose run --rm aegis report --input <report.json> --format html` |
+
+### Command reference
+
+| Command | Purpose | Typical output |
+|---|---|---|
+| `guide` | Show practical workflows, important options, tips, and exit-code guidance. | Terminal guide text |
+| `scan` | Run every configured attack module once with no defense enabled. | `baseline.json` or `baseline.html` |
+| `attack --module <name>` | Run one attack module, useful for debugging a vulnerability class. | `attack-<name>.json` or `.html` |
+| `defend --defense <name>` | Run the full attack set with one defense enabled. | `defense-<name>.json` or `.html` |
+| `matrix` | Run baseline, individual defenses, and layered defense combinations. | One report per scenario plus a matrix summary JSON |
+| `report --input <file>` | Re-render an existing JSON report or matrix summary as JSON or HTML. | Path set by `--output` |
+
+### Common options
+
+```bash
+# Pick a config file
+docker compose --profile local run --rm \
+  -v "$(pwd)/aegis/config.my_model.yaml:/config/config.yaml:ro" \
+  -e AEGIS_CONFIG_PATH=/config/config.yaml \
+  aegis scan
+
+# Choose report format
+docker compose --profile local run --rm aegis scan --format html
+
+# Write all scan artifacts and rendered reports to a directory
+docker compose --profile local run --rm aegis scan --output /app/reports/local-model
+
+# Re-render a JSON report to a specific HTML file
+docker compose run --rm aegis report \
+  --input reports/local-model/baseline.json \
+  --format html \
+  --output reports/local-model/baseline.html
+```
+
+`--config` overrides `AEGIS_CONFIG_PATH`. `--output` overrides `AEGIS_REPORTS_DIR`. If neither is set, AEGIS uses the config file's `reporting.output_dir`, falling back to `./reports`.
+
+### Exit codes
+
+| Code | Meaning |
+|---:|---|
+| `0` | The command completed and no successful attacks were found. |
+| `1` | A runtime, argument, config, or report-rendering error occurred. |
+| `2` | The command completed and at least one vulnerability was found. |
+
+Exit code `2` is expected for vulnerable targets. In CI, treat it as a security gate failure; in local research, treat it as a completed scan with findings to inspect.
+
+### Discover modules and defenses
+
+The CLI validates names against your active config. If you use an invalid name, AEGIS prints the available choices:
+
+```bash
+docker compose --profile local run --rm aegis attack --module does_not_exist
+docker compose --profile local run --rm aegis defend --defense does_not_exist
+```
+
+Then run a focused command with one of the listed names:
+
+```bash
+docker compose --profile local run --rm aegis attack --module llm01_prompt_inject --output /app/reports/prompt-injection
+docker compose --profile local run --rm aegis defend --defense tool_boundary --output /app/reports/tool-boundary
+```
+
+### Recommended workflows
+
+For Docker local-model validation:
+
+```bash
+docker compose --profile local run --rm aegis scan \
+  --format json \
+  --output /app/reports/local-model
+```
+
+For a targeted module loop:
+
+```bash
+docker compose --profile local run --rm aegis attack \
+  --module asi02_tool_misuse \
+  --output /app/reports/asi02
+```
+
+For defense comparison:
+
+```bash
+docker compose --profile local run --rm aegis matrix \
+  --format json \
+  --output /app/reports/defense-matrix
+```
+
+For HTML review after a JSON scan:
+
+```bash
+docker compose run --rm aegis report \
+  --input reports/local-model/baseline.json \
+  --format html \
+  --output reports/local-model/baseline.html
+```
+
+## Docker Deployment
+
+The repo ships with a hardened Docker Compose setup for operators who want to run AEGIS without installing Python or `uv` locally.
+
+The default container posture is intentionally conservative:
+
+- the scanner and dashboard run as a non-root user
+- dashboard ports bind to `127.0.0.1` by default
+- the bundled Ollama service is internal-only by default and does not publish a host port
+- the scanner runs with a read-only root filesystem plus writable mounts only for `/tmp` and `reports/`
+- local Ollama is optional and lives behind the `local` profile
+
+1. Copy the operator defaults:
+
+```bash
+cp .env.example .env
+```
+
+2. Choose your local model in `.env`, then start Ollama and pull it:
+
+```dotenv
+OLLAMA_MODELS=<your-model>:<tag>
+AEGIS_TARGET_MODEL=<your-model>:<tag>
+```
+
+```bash
+docker compose --profile local up -d ollama
+docker compose --profile local run --rm ollama-init
+```
+
+3. Run a baseline scan:
+
+```bash
+docker compose --profile local run --rm aegis scan
+```
+
+By default the container reads `AEGIS_CONFIG_PATH` from `.env`, accepts model overrides from `.env`, and writes reports to `./reports`. Exit code `2` still means the run completed and vulnerabilities were found.
+
+4. Optional dashboard:
+
+```bash
+docker compose --profile dashboard up -d dashboard
+```
+
+Then open `http://127.0.0.1:8501`.
+
+#### Common Docker commands
+
+```bash
+docker compose --profile local run --rm aegis matrix
+docker compose --profile local run --rm aegis attack --module asi_dynamic_cloak
+docker compose --profile local run --rm aegis defend --defense input_validator
+docker compose run --rm aegis report --input /app/reports/baseline.json --format html
+```
+
+#### Custom config file
+
+To run with your own config, mount it read-only and point `AEGIS_CONFIG_PATH` at the mounted file:
+
+```bash
+docker compose run --rm \
+  -v "$(pwd)/aegis/config.my_model.yaml:/config/config.yaml:ro" \
+  -e AEGIS_CONFIG_PATH=/config/config.yaml \
+  aegis scan
+```
+
+#### Custom model from `.env`
+
+For the common local Ollama workflow, you usually only need `.env`:
+
+```dotenv
+OLLAMA_MODELS=<target-model>:<tag>
+AEGIS_TARGET_MODEL=<target-model>:<tag>
+# Optional: use a stronger or separate judge
+AEGIS_JUDGE_MODEL=<judge-model>:<tag>
+```
+
+`AEGIS_TARGET_MODEL` sets the target, fallback, and judge model unless you also set `AEGIS_FALLBACK_MODEL` or `AEGIS_JUDGE_MODEL`.
+
+#### Optional GPU passthrough for local Ollama
+
+If your Docker host supports GPU passthrough, add the GPU override file when launching the local Ollama profile:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.gpu.yml --profile local up -d ollama
+```
+
+For hosted providers, set the relevant values in `.env` such as `AEGIS_PROVIDER_MODE=huggingface` and `HF_TOKEN=...`, then run the same `docker compose run --rm aegis ...` commands.
 
 ---
 
-## 🧩 How It Works
+## 🧩 Execution Details
 
-```
-┌──────────────┐   ┌─────────────┐   ┌──────────────┐   ┌──────────────┐
-│  Attack      │──▶│  Testbed    │──▶│  Target      │──▶│  Evaluator   │
-│  Modules     │   │  Agent      │   │  LLM         │   │  (rule+judge)│
-│  (payloads)  │   │  (MCP/RAG)  │   │  (your model)│   │              │
-└──────────────┘   └─────────────┘   └──────────────┘   └──────┬───────┘
-                                                               │
-                                                               ▼
-                                                        ┌──────────────┐
-                                                        │  Report      │
-                                                        │  JSON / HTML │
-                                                        └──────────────┘
-```
-
-1. **Attack modules** generate adversarial payloads for a specific vulnerability class (e.g. prompt injection, tool misuse).
-2. The **testbed agent** wraps your target model with configurable MCP servers, RAG, memory, and safety profiles (`default` / `hardened` / `minimal`).
-3. Your **target LLM** produces a response.
-4. The **evaluator** scores it with deterministic rules *and* an LLM judge. A payload is flagged successful only when both signals agree.
-5. Optional **defenses** sit between attacker and agent, letting you measure the blast-radius reduction of each guardrail.
-6. **Reports** are written as machine-readable JSON and human-readable HTML.
+1. **Attack modules** generate adversarial payloads for a specific vulnerability class, such as prompt injection, tool misuse, memory poisoning, or command injection.
+2. **The testbed agent** wraps your target model with configurable MCP servers, RAG, memory, and safety profiles (`default` / `hardened` / `minimal`).
+3. **Your target LLM** responds to the adversarial scenario.
+4. **The evaluator** scores the transcript with deterministic rules and an LLM judge.
+5. **Optional defenses** sit between the attacker and agent so you can measure whether a guardrail reduces risk.
+6. **Reports** are written as JSON or HTML for audit, CI, and human review.
 
 ### Scoring model
 
@@ -121,7 +380,7 @@ Successful = flagged by **both** scorers with confidence above the threshold.
 ## 🎯 Attack Surface
 
 <details open>
-<summary><b>15 active modules — click for baseline ASR against <code>qwen3.5:0.8b</code></b></summary>
+<summary><b>15 active modules — click for the latest baseline ASR</b></summary>
 
 | Module | Category | ASR (baseline) |
 |---|---|---:|
@@ -165,13 +424,24 @@ The latest defense-matrix analysis lives in [DEFENSE_EVALUATION.md](docs/DEFENSE
 
 ## 🔌 Integrate Your Own Model
 
-AEGIS accepts any model exposed through the supported providers. The fastest path is to point Ollama at your model and swap the model name in a config file.
+AEGIS accepts any model exposed through the supported providers. The fastest Docker path is to point the bundled Ollama service at your model through `.env`.
 
-### Option A — Ollama (recommended, local)
+### Option A — Ollama in Docker (recommended, local)
+
+```dotenv
+OLLAMA_MODELS=<your-model>:<tag>
+AEGIS_TARGET_MODEL=<your-model>:<tag>
+# Optional: use a separate, stronger judge
+# AEGIS_JUDGE_MODEL=<judge-model>:<tag>
+```
 
 ```bash
-ollama pull <your-model>:<tag>
+docker compose --profile local up -d ollama
+docker compose --profile local run --rm ollama-init
+docker compose --profile local run --rm aegis scan --output /app/reports/my-model
 ```
+
+### Option B — Ollama outside Docker
 
 Create `aegis/config.my_model.yaml`:
 
@@ -203,7 +473,7 @@ Run it:
 uv run aegis scan --config aegis/config.my_model.yaml
 ```
 
-### Option B — Hugging Face
+### Option C — Hugging Face
 
 ```yaml
 testbed:
@@ -215,7 +485,7 @@ testbed:
 
 Then export your token: `export HF_TOKEN=hf_...`
 
-### Option C — Hosted APIs / custom providers
+### Option D — Hosted APIs / custom providers
 
 Implement the provider interface in [aegis/interfaces](aegis/interfaces) and wire it into [aegis/testbed](aegis/testbed). The orchestrator is provider-agnostic — it only needs a callable that takes messages and returns a completion.
 
@@ -225,14 +495,14 @@ Stronger judge + weaker target gives cleaner signal. In your config:
 
 ```yaml
 evaluation:
-  judge_model: "llama3.1:8b"   # bigger judge
+  judge_model: "<judge-model>:<tag>"   # bigger or stricter judge
 testbed:
-  model: "qwen3.5:0.8b"        # smaller target under test
+  model: "<target-model>:<tag>"        # target under test
 ```
 
 ### Why the low-VRAM single-model path exists
 
-Current Qwen "thinking" models can return an empty `response` on Ollama's `/api/generate` while filling only the `thinking` field. AEGIS uses `/api/chat` with `think: false` and reuses the same small model as both target and judge so you can run the full suite on a 4 GB GPU.
+Some reasoning models can return an empty `response` on Ollama's `/api/generate` while filling only the `thinking` field. AEGIS uses `/api/chat` with `think: false` and can reuse one small model as both target and judge so you can run the full suite on constrained hardware.
 
 ---
 
@@ -241,7 +511,7 @@ Current Qwen "thinking" models can return an empty `response` on Ollama's `/api/
 ```bash
 uv run ruff check .
 uv run --extra dashboard pytest -s --cov=aegis --cov-report=term-missing --cov-fail-under=80
-uv run aegis scan --config aegis/config.local_single_qwen.yaml --format json --output reports
+AEGIS_TARGET_MODEL=<your-model>:<tag> uv run aegis scan --format json --output reports
 ```
 
 - Dashboard tests require the `dashboard` extra (`plotly`, `pandas`, `streamlit`).
@@ -264,7 +534,7 @@ aegis/
 ├── cli.py           # `aegis` CLI entry point
 ├── orchestrator.py  # scan / attack / defend / matrix pipelines
 ├── config.yaml                      # default multi-profile config
-└── config.local_single_qwen.yaml    # validated low-VRAM config
+└── config.local_single_qwen.yaml    # bundled low-VRAM Ollama config
 
 dashboard/           # Streamlit dashboard (optional)
 datasets/            # fixtures, KB corpora, payload seeds

@@ -69,6 +69,28 @@ class TestLoadConfig:
         config = load_config(Path(custom))
         assert config["testbed"]["model"] == "path-test"
 
+    def test_model_env_overrides_keep_docker_runs_configurable(self, monkeypatch):
+        from aegis.config import load_config
+
+        monkeypatch.setenv("AEGIS_TARGET_MODEL", "local-target:latest")
+        config = load_config("aegis/config.local_single_qwen.yaml")
+
+        assert config["testbed"]["model"] == "local-target:latest"
+        assert config["testbed"]["fallback_model"] == "local-target:latest"
+        assert config["evaluation"]["judge_model"] == "local-target:latest"
+
+    def test_specific_judge_env_override_wins(self, monkeypatch):
+        from aegis.config import load_config
+
+        monkeypatch.setenv("AEGIS_TARGET_MODEL", "local-target:latest")
+        monkeypatch.setenv("AEGIS_JUDGE_MODEL", "local-judge:latest")
+
+        config = load_config("aegis/config.local_single_qwen.yaml")
+
+        assert config["testbed"]["model"] == "local-target:latest"
+        assert config["testbed"]["fallback_model"] == "local-target:latest"
+        assert config["evaluation"]["judge_model"] == "local-judge:latest"
+
     def test_day7_core7_config_has_exactly_seven_core_modules(self):
         from aegis.config import load_config
 

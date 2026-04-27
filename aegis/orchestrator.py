@@ -11,13 +11,13 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from aegis.lazy_loading import load_symbol
 from aegis.attacks.base import BaseAttackModule
 from aegis.config import load_config
 from aegis.evidence.store import EvidenceTraceStore
 from aegis.interfaces.attack import AttackModule
 from aegis.interfaces.scorer import Scorer
 from aegis.interfaces.scorer_protocol import ScorerProtocol
+from aegis.lazy_loading import load_symbol
 from aegis.models import AttackResult, EvaluationResult, SecurityReport, TraceRecord
 
 logger = logging.getLogger(__name__)
@@ -73,7 +73,7 @@ class AEGISOrchestrator:
         self._last_run_errors: list[dict[str, Any]] = []
 
     @property
-    def agent(self):
+    def agent(self) -> Any:
         if self._agent is None:
             self._agent = _load_default_agent()(config=dict(self.config["testbed"]))
         return self._agent
