@@ -8,7 +8,7 @@
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-751%20passed-brightgreen)]()
+[![Tests](https://img.shields.io/badge/tests-785%20passed-brightgreen)]()
 [![Coverage](https://img.shields.io/badge/coverage-88.8%25-brightgreen)]()
 [![Attack Modules](https://img.shields.io/badge/attacks-15-orange)]()
 [![Payloads](https://img.shields.io/badge/payloads-191-red)]()
@@ -21,7 +21,9 @@
 
 ## What is AEGIS?
 
-AEGIS is a **red-team framework for LLM agents**. It fires adversarial payloads at a target model, watches how the agent reacts, scores the outcome with both deterministic rules and an LLM judge, and emits a structured report you can audit.
+AEGIS is a **red-team framework for LLM agents**. It fires adversarial payloads at a target model, watches how the agent reacts, scores the outcome with deterministic rules and optional LLM-judge confirmation, and emits a structured report you can audit.
+
+It is built for AI teams at companies shipping agents, MCP servers, RAG systems, and tool-using assistants. The default workflow is local and Docker-first so teams can test private models and internal tooling before a launch review.
 
 It is designed for the reality of modern agentic systems: tool use, MCP servers, RAG, multi-turn conversations, and the gap between "the model refuses" and "the agent still does the dangerous thing."
 
@@ -54,7 +56,7 @@ flowchart LR
 - **5 defense modules** for layered hardening — input validation, output filtering, tool boundaries, MCP integrity, permission enforcement.
 - **Dual-scorer evaluation:** deterministic rule-based scoring + LLM-judge confirmation.
 - **Low-VRAM friendly:** the local path can run one Ollama model for both target and judge on consumer hardware.
-- **Pluggable providers:** Ollama, Hugging Face, or offline fixtures.
+- **Pluggable providers:** Ollama, hosted API providers, and offline fixtures.
 - **Structured reports:** JSON + HTML, with optional Streamlit dashboard.
 - **CI-ready:** exit code `2` when vulnerabilities are found, so pipelines can fail loudly.
 
@@ -266,6 +268,41 @@ docker compose run --rm aegis report \
   --output reports/local-model/baseline.html
 ```
 
+## Hosted Provider Config
+
+Docker remains the default install path. Hosted providers are useful for pilots, quick demos, or teams that already run their target model behind an API. Use one generic template and set the API shape, base URL, key environment variable, and model for your provider.
+
+1. Copy or edit the hosted template:
+
+```bash
+cp aegis/config.hosted.yaml aegis/config.my_provider.yaml
+```
+
+2. Set these fields in your copied config:
+
+| Field | What to set |
+|---|---|
+| `testbed.provider.mode` | `openai_compat`, `anthropic`, or `hf_inference` |
+| `testbed.provider.api_key_env` | The environment variable that holds your provider key |
+| `testbed.provider.base_url` | Required for chat-completions-compatible APIs; omit or leave blank for fixed-shape adapters |
+| `testbed.provider.model` | The target model identifier exposed by your provider |
+| `timeout_seconds` / `max_tokens` | Provider call limits for the scan |
+
+3. Export your key locally, then run the scan:
+
+```bash
+read -rsp "Provider API key: " PROVIDER_API_KEY
+export PROVIDER_API_KEY
+echo
+docker compose run --rm \
+  -v "$(pwd)/aegis/config.my_provider.yaml:/config/config.yaml:ro" \
+  aegis scan \
+  --config /config/config.yaml \
+  --output /app/reports/hosted-provider
+```
+
+The Docker service passes `PROVIDER_API_KEY` into the container for this template. If you choose a different `api_key_env`, pass it explicitly with `docker compose run --rm -e YOUR_KEY_ENV ...`. The template keeps scoring rule-based by default to avoid requiring a separate judge provider. Keep API keys in environment variables, not YAML.
+
 ## Docker Deployment
 
 The repo ships with a hardened Docker Compose setup for operators who want to run AEGIS without installing Python or `uv` locally.
@@ -353,7 +390,7 @@ If your Docker host supports GPU passthrough, add the GPU override file when lau
 docker compose -f docker-compose.yml -f docker-compose.gpu.yml --profile local up -d ollama
 ```
 
-For hosted providers, set the relevant values in `.env` such as `AEGIS_PROVIDER_MODE=huggingface` and `HF_TOKEN=...`, then run the same `docker compose run --rm aegis ...` commands.
+For hosted providers, copy `aegis/config.hosted.yaml`, set your provider fields, and keep API keys in environment variables rather than YAML.
 
 ---
 
@@ -473,19 +510,29 @@ Run it:
 uv run aegis scan --config aegis/config.my_model.yaml
 ```
 
-### Option C — Hugging Face
+### Option C — Hosted APIs
+
+Use one of the built-in hosted provider modes when your model is already behind an API.
 
 ```yaml
 testbed:
+  model: "<provider-model>"
   provider:
-    mode: "huggingface"
-    hf_model: "meta-llama/Llama-3.2-3B-Instruct"
-    hf_token_env: "HF_TOKEN"
+    mode: "openai_compat"      # openai_compat | anthropic | hf_inference
+    api_key_env: "PROVIDER_API_KEY"
+    base_url: "https://api.example.com/v1"
+    model: "<provider-model>"
+    timeout_seconds: 60
+    max_tokens: 512
+    require_external: true
+
+evaluation:
+  scorers: [rule_based]
 ```
 
-Then export your token: `export HF_TOKEN=hf_...`
+Read the key into an environment variable for the current shell session; do not paste raw keys into docs, config files, or issue/backlog notes.
 
-### Option D — Hosted APIs / custom providers
+### Option D — Custom providers
 
 Implement the provider interface in [aegis/interfaces](aegis/interfaces) and wire it into [aegis/testbed](aegis/testbed). The orchestrator is provider-agnostic — it only needs a callable that takes messages and returns a completion.
 
@@ -540,7 +587,7 @@ dashboard/           # Streamlit dashboard (optional)
 datasets/            # fixtures, KB corpora, payload seeds
 docs/                # methodology, findings, evaluation reports
 reports/             # generated scan artifacts (local)
-tests/               # 751 tests, 88.8% coverage
+tests/               # 785 tests, 88.8% coverage
 ```
 
 ---
@@ -551,10 +598,13 @@ tests/               # 751 tests, 88.8% coverage
 |---|---|
 | [FINDINGS.md](docs/FINDINGS.md) | Fresh baseline results and local-run observations |
 | [METHODOLOGY.md](docs/METHODOLOGY.md) | Scoring, local execution path, reproducibility notes |
+| [COMPANY_QUICKSTART.md](docs/COMPANY_QUICKSTART.md) | 10-minute Docker-first workflow for company AI teams |
+| [MCP_TOOL_SECURITY.md](docs/MCP_TOOL_SECURITY.md) | Practical MCP/tool security guidance and AEGIS module mapping |
+| [DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md) | Short demo flow for launch calls and videos |
+| [LAUNCH_COPY.md](docs/LAUNCH_COPY.md) | Public launch copy, audience, and positioning |
 | [DEFENSE_EVALUATION.md](docs/DEFENSE_EVALUATION.md) | Defense-matrix interpretation and current limits |
 | [PROBE_CATALOG_REVIEW.md](docs/PROBE_CATALOG_REVIEW.md) | Per-module payload catalog review |
 | [CHANGELOG.md](CHANGELOG.md) | Release history and development notes |
-| [TASK_PROMPTS.md](TASK_PROMPTS.md) | Benign task prompts used for agent behavior |
 
 ---
 

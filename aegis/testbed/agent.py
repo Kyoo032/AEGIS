@@ -1,6 +1,7 @@
 """Victim agent testbed implementation."""
 from __future__ import annotations
 
+import importlib
 import inspect
 import json
 import logging
@@ -31,6 +32,11 @@ logger = logging.getLogger(__name__)
 
 _ALL_KNOWN_SERVERS: frozenset[str] = frozenset({
     "filesystem", "http", "email", "database", "code_exec",
+})
+_HOSTED_PROVIDER_MODES: frozenset[str] = frozenset({
+    "openai_compat",
+    "anthropic",
+    "hf_inference",
 })
 _MAX_TOOL_ITERATIONS = 5
 
@@ -228,15 +234,23 @@ class DefaultAgent(AgentInterface):
         if provider_mode == "offline":
             ollama_ok, ollama_note = False, "skipped for provider mode 'offline'"
             hf_ok, hf_note = False, "skipped for provider mode 'offline'"
+            hosted_ok, hosted_note = False, "skipped for provider mode 'offline'"
         elif provider_mode == "ollama":
             ollama_ok, ollama_note = self._check_ollama_health()
             hf_ok, hf_note = False, "skipped for provider mode 'ollama'"
+            hosted_ok, hosted_note = False, "skipped for provider mode 'ollama'"
         elif provider_mode == "huggingface":
             ollama_ok, ollama_note = False, "skipped for provider mode 'huggingface'"
             hf_ok, hf_note = self._check_hf_token(provider_cfg)
+            hosted_ok, hosted_note = False, "skipped for provider mode 'huggingface'"
+        elif provider_mode in _HOSTED_PROVIDER_MODES:
+            ollama_ok, ollama_note = False, f"skipped for provider mode '{provider_mode}'"
+            hf_ok, hf_note = False, f"skipped for provider mode '{provider_mode}'"
+            hosted_ok, hosted_note = self._check_hosted_provider_key(provider_mode, provider_cfg)
         else:
             ollama_ok, ollama_note = self._check_ollama_health()
             hf_ok, hf_note = self._check_hf_token(provider_cfg)
+            hosted_ok, hosted_note = False, "hosted providers require explicit provider mode"
 
         server_checks: dict[str, dict[str, Any]] = {}
         for server_name in self._configured_servers():
@@ -265,6 +279,7 @@ class DefaultAgent(AgentInterface):
                 "selected_note": self._provider_note,
                 "ollama": {"ok": ollama_ok, "note": ollama_note},
                 "huggingface": {"ok": hf_ok, "note": hf_note},
+                "hosted": {"ok": hosted_ok, "note": hosted_note},
             },
             "model": str(self._config.get("model", "qwen3:4b")),
             "mcp": {"ok": mcp_ok, "servers": server_checks},
@@ -300,6 +315,13 @@ class DefaultAgent(AgentInterface):
         provider_cfg.setdefault("ollama_generate_timeout_seconds", 90)
         provider_cfg.setdefault("ollama_num_predict", 128)
         provider_cfg.setdefault("ollama_keep_alive", "15m")
+        provider_cfg.setdefault("api_key_env", "")
+        provider_cfg.setdefault("base_url", "")
+        provider_cfg.setdefault("model", "")
+        provider_cfg.setdefault("timeout_seconds", testbed_cfg.get("llm_timeout_seconds", 30))
+        provider_cfg.setdefault("max_tokens", 256)
+        if provider_cfg.get("model"):
+            testbed_cfg["model"] = str(provider_cfg["model"])
         provider_cfg.setdefault("require_external", False)
         security_cfg.setdefault("memory_max_turns", 200)
         security_cfg.setdefault("rag_max_items", 200)
@@ -396,10 +418,19 @@ class DefaultAgent(AgentInterface):
         allowlist = security_cfg.get("http_allowlist", [])
         if not isinstance(allowlist, list):
             allowlist = []
-        base_url = str(provider_cfg.get("ollama_base_url", "http://localhost:11434"))
-        host = (urlparse(base_url).hostname or "").strip().lower()
-        if host and host not in allowlist:
-            allowlist.append(host)
+        urls = [str(provider_cfg.get("ollama_base_url", "http://localhost:11434"))]
+        mode = str(provider_cfg.get("mode", "auto"))
+        if mode == "openai_compat" and provider_cfg.get("base_url"):
+            urls.append(str(provider_cfg["base_url"]))
+        elif mode == "anthropic":
+            urls.append(str(provider_cfg.get("base_url") or "https://api.anthropic.com"))
+        elif mode == "hf_inference":
+            urls.append(str(provider_cfg.get("base_url") or "https://api-inference.huggingface.co"))
+
+        for base_url in urls:
+            host = (urlparse(base_url).hostname or "").strip().lower()
+            if host and host not in allowlist:
+                allowlist.append(host)
         security_cfg["http_allowlist"] = allowlist
 
     def _default_defense_config(self, defense_name: str) -> dict[str, Any]:
@@ -513,6 +544,11 @@ class DefaultAgent(AgentInterface):
                     f"HuggingFace provider requested but unavailable: {hf_note}"
                 )
             return "huggingface", hf_note
+        if mode in _HOSTED_PROVIDER_MODES:
+            hosted_ok, hosted_note = self._check_hosted_provider_key(mode, provider_cfg)
+            if not hosted_ok:
+                raise RuntimeError(f"{mode} provider requested but unavailable: {hosted_note}")
+            return mode, hosted_note
 
         ollama_ok, ollama_note = self._check_ollama_health()
         if ollama_ok:
@@ -528,6 +564,36 @@ class DefaultAgent(AgentInterface):
                 f"Ollama: {ollama_note}; HuggingFace: {hf_note}"
             )
         return "offline", f"falling back to offline mode; ollama={ollama_note}; hf={hf_note}"
+
+    def _check_hosted_provider_key(
+        self,
+        mode: str,
+        provider_cfg: dict[str, Any],
+    ) -> tuple[bool, str]:
+        try:
+            client = importlib.import_module(f"aegis.interfaces.{mode}")
+            result = client.api_key_available(provider_cfg)
+        except Exception as exc:
+            return False, f"provider adapter unavailable: {exc}"
+
+        if isinstance(result, tuple):
+            available = bool(result[0])
+            note = str(result[1]) if len(result) > 1 else ""
+        else:
+            available = bool(result)
+            note = ""
+
+        env_name = self._hosted_api_key_env(mode, provider_cfg)
+        if not available:
+            return False, note or f"missing env {env_name}"
+        return True, note or f"API key found via {env_name}"
+
+    def _hosted_api_key_env(self, mode: str, provider_cfg: dict[str, Any]) -> str:
+        if provider_cfg.get("api_key_env"):
+            return str(provider_cfg["api_key_env"])
+        if mode == "hf_inference" and provider_cfg.get("hf_token_env"):
+            return str(provider_cfg["hf_token_env"])
+        return "PROVIDER_API_KEY"
 
     def _check_ollama_health(self) -> tuple[bool, str]:
         provider_cfg = self._config.get("provider", {})
@@ -898,12 +964,14 @@ class DefaultAgent(AgentInterface):
     ) -> tuple[str, str | None, str | None]:
         prompt = self._build_prompt(payload, tool_calls)
 
-        if self._provider_name in {"ollama", "huggingface"}:
+        if self._provider_name in {"ollama", "huggingface", *_HOSTED_PROVIDER_MODES}:
             try:
                 if self._provider_name == "ollama":
                     llm_output = self._call_ollama(prompt)
-                else:
+                elif self._provider_name == "huggingface":
                     llm_output = self._call_hf(prompt)
+                else:
+                    llm_output = self._call_hosted_provider(prompt)
                 return llm_output, llm_output, None
             except LLMCallError as exc:
                 log = logger.info if "empty response from Ollama" in str(exc) else logger.warning
@@ -1015,6 +1083,33 @@ class DefaultAgent(AgentInterface):
             max_delay_seconds=max_delay,
             jitter_seconds=jitter,
             operation_name="hf_generate",
+        )
+
+    def _call_hosted_provider(self, prompt: str) -> str:
+        if self._provider_name not in _HOSTED_PROVIDER_MODES:
+            raise RuntimeError(f"Provider '{self._provider_name}' is not a hosted provider.")
+
+        client = importlib.import_module(f"aegis.interfaces.{self._provider_name}")
+        provider_cfg = dict(self._config.get("provider", {}))
+        provider_cfg["model"] = str(provider_cfg.get("model") or self._config.get("model", ""))
+        timeout_seconds, max_retries, base_delay, max_delay, jitter = self._retry_settings()
+        timeout_seconds = float(provider_cfg.get("timeout_seconds", timeout_seconds))
+
+        def _invoke() -> str:
+            output = client.complete(prompt, provider_cfg)
+            text = str(output).strip()
+            if not text:
+                raise ValueError(f"empty response from {self._provider_name}")
+            return text
+
+        return call_with_retry(
+            _invoke,
+            max_retries=max_retries,
+            timeout_seconds=timeout_seconds,
+            base_delay_seconds=base_delay,
+            max_delay_seconds=max_delay,
+            jitter_seconds=jitter,
+            operation_name=f"{self._provider_name}_generate",
         )
 
     def _offline_summary(self, payload: AttackPayload, tool_calls: list[ToolCall]) -> str:

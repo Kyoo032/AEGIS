@@ -387,6 +387,58 @@ class TestDefaultAgentTimeoutRetry:
         assert response.final_output.startswith("Processed payload")
 
 
+class TestDefaultAgentHostedProviders:
+    def test_explicit_hosted_provider_requires_api_key(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.delenv("PROVIDER_API_KEY", raising=False)
+        cfg = _offline_cfg("default")
+        cfg["provider"]["mode"] = "openai_compat"
+        cfg["provider"]["api_key_env"] = "PROVIDER_API_KEY"
+
+        with pytest.raises(RuntimeError, match="PROVIDER_API_KEY"):
+            DefaultAgent(config=cfg)
+
+    def test_explicit_hosted_provider_selects_without_network_probe(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        monkeypatch.setenv("PROVIDER_API_KEY", "test-key")
+        cfg = _offline_cfg("default")
+        cfg["provider"].update({
+            "mode": "openai_compat",
+            "api_key_env": "PROVIDER_API_KEY",
+            "base_url": "https://api.example.test/v1",
+            "model": "provider-model",
+        })
+
+        agent = DefaultAgent(config=cfg)
+        health = agent.health_check()
+
+        assert agent.get_config()["provider_selected"] == "openai_compat"
+        assert agent.get_config()["model"] == "provider-model"
+        assert "api.example.test" in agent.get_config()["security"]["http_allowlist"]
+        assert health["provider"]["hosted"]["ok"] is True
+        assert "test-key" not in health["provider"]["hosted"]["note"]
+        assert "sha256:" in health["provider"]["hosted"]["note"]
+
+    def test_hosted_provider_output_uses_adapter(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv("PROVIDER_API_KEY", "test-key")
+        monkeypatch.setattr("aegis.testbed.retry.time.sleep", lambda *_: None)
+        cfg = _offline_cfg("default")
+        cfg["provider"].update({
+            "mode": "openai_compat",
+            "api_key_env": "PROVIDER_API_KEY",
+            "model": "provider-model",
+        })
+        agent = DefaultAgent(config=cfg)
+        monkeypatch.setattr("aegis.interfaces.openai_compat.complete", lambda prompt, cfg: "hosted output")
+
+        response = agent.run(_payload())
+
+        assert response.final_output == "hosted output"
+        assert response.raw_llm_output == "hosted output"
+        assert response.error is None
+
+
 class TestDefaultAgentOllamaToolDispatch:
     def test_ollama_generation_prompt_disables_qwen_thinking(self):
         agent = DefaultAgent(config=_offline_cfg("default"))

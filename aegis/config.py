@@ -20,6 +20,18 @@ _REQUIRED_KEYS: frozenset[str] = frozenset(
     {"testbed", "attacks", "evaluation", "defenses", "reporting"}
 )
 
+_PROVIDER_MODES: frozenset[str] = frozenset(
+    {
+        "auto",
+        "ollama",
+        "huggingface",
+        "offline",
+        "openai_compat",
+        "anthropic",
+        "hf_inference",
+    }
+)
+
 _DEFAULTS: dict[str, Any] = {
     "testbed": {
         "model": "qwen3:4b",
@@ -35,6 +47,11 @@ _DEFAULTS: dict[str, Any] = {
             "ollama_keep_alive": "15m",
             "hf_model": "HuggingFaceH4/zephyr-7b-beta",
             "hf_token_env": "HF_TOKEN",
+            "api_key_env": "",
+            "base_url": "",
+            "model": "",
+            "timeout_seconds": 30,
+            "max_tokens": 256,
             "require_external": False,
         },
         "agent_profile": "default",
@@ -261,6 +278,7 @@ def load_config(config_path: str | Path | None = None) -> dict[str, Any]:
     judge_model = os.environ.get("AEGIS_JUDGE_MODEL") or target_model
     if target_model:
         merged["testbed"]["model"] = target_model
+        merged["testbed"]["provider"]["model"] = target_model
     if fallback_model:
         merged["testbed"]["fallback_model"] = fallback_model
     if judge_model:
@@ -337,11 +355,19 @@ def _validate_nested(config: dict[str, Any], source_path: Path) -> None:
         raise ValueError(f"{source_path}: 'testbed.provider.ollama_keep_alive' must be str.")
     if not isinstance(provider.get("require_external"), bool):
         raise ValueError(f"{source_path}: 'testbed.provider.require_external' must be bool.")
+    provider_mode = str(provider.get("mode", "auto"))
+    if provider_mode not in _PROVIDER_MODES:
+        raise ValueError(
+            f"{source_path}: 'testbed.provider.mode' must be one of "
+            f"{sorted(_PROVIDER_MODES)}, got {provider_mode!r}."
+        )
 
     number_keys = (
         ("testbed.provider.ollama_health_timeout_seconds", provider.get("ollama_health_timeout_seconds")),
         ("testbed.provider.ollama_generate_timeout_seconds", provider.get("ollama_generate_timeout_seconds")),
         ("testbed.provider.ollama_num_predict", provider.get("ollama_num_predict")),
+        ("testbed.provider.timeout_seconds", provider.get("timeout_seconds")),
+        ("testbed.provider.max_tokens", provider.get("max_tokens")),
         ("evaluation.judge_timeout_seconds", config["evaluation"].get("judge_timeout_seconds")),
         ("evaluation.judge_max_retries", config["evaluation"].get("judge_max_retries")),
         ("evaluation.judge_num_predict", config["evaluation"].get("judge_num_predict")),
@@ -349,6 +375,8 @@ def _validate_nested(config: dict[str, Any], source_path: Path) -> None:
     for key, value in number_keys:
         if not isinstance(value, (int, float)):
             raise ValueError(f"{source_path}: '{key}' must be numeric.")
+        if value <= 0:
+            raise ValueError(f"{source_path}: '{key}' must be greater than zero.")
 
     if not isinstance(config["evaluation"].get("judge_hard_fail"), bool):
         raise ValueError(f"{source_path}: 'evaluation.judge_hard_fail' must be bool.")

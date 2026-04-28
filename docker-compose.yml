@@ -25,6 +25,7 @@ services:
       AEGIS_JUDGE_MODEL: ${AEGIS_JUDGE_MODEL:-}
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
       HF_TOKEN: ${HF_TOKEN:-}
+      PROVIDER_API_KEY: ${PROVIDER_API_KEY:-}
     volumes:
       - ./reports:/app/reports
     depends_on:
