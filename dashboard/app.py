@@ -34,16 +34,30 @@ def _cached_load_matrix(path: str) -> dict:
     return load_matrix_summary(Path(path))
 
 
+def _safe_list_session_reports() -> list[dict]:
+    try:
+        from dashboard.utils.session_reports import list_session_reports
+
+        return list_session_reports()
+    except Exception:
+        return []
+
+
 def main() -> None:
     st.title("AEGIS Security Dashboard")
 
-    reports = _cached_list_reports(str(REPORTS_DIR))
+    reports = _cached_list_reports(str(REPORTS_DIR)) + _safe_list_session_reports()
 
     if not reports:
         st.warning(
             f"No JSON reports found in `{REPORTS_DIR}`. "
             "Run an AEGIS scan first: `aegis scan --format json`"
         )
+        st.info("Use the Run Scan button to create a dashboard report from this session.")
+        if st.sidebar.button("Run Scan") is True:
+            from dashboard.pages.run_scan import render_run_scan
+
+            render_run_scan()
         return
 
     # Sidebar controls
@@ -63,8 +77,14 @@ def main() -> None:
     # Navigation
     page = st.sidebar.radio(
         "Page",
-        ["Overview", "OWASP Breakdown", "Defense Matrix", "Findings"],
+        ["Overview", "OWASP Breakdown", "Defense Matrix", "Findings", "Run Scan"],
     )
+
+    if page == "Run Scan":
+        from dashboard.pages.run_scan import render_run_scan
+
+        render_run_scan()
+        return
 
     # Load and render
     if report_type == "report":

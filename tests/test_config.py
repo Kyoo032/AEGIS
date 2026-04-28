@@ -104,3 +104,46 @@ class TestLoadConfig:
             "mcp06_cmd_injection",
             "llm01_prompt_inject",
         ]
+
+
+    def test_hosted_provider_template_loads(self):
+        from aegis.config import load_config
+
+        config = load_config("aegis/config.hosted.yaml")
+
+        assert config["testbed"]["provider"]["mode"] == "openai_compat"
+        assert config["testbed"]["provider"]["api_key_env"] == "PROVIDER_API_KEY"
+        assert config["evaluation"]["scorers"] == ["rule_based"]
+        assert config["attacks"]["payloads_per_module"] <= 5
+
+    def test_target_model_env_overrides_hosted_provider_model(self, monkeypatch):
+        from aegis.config import load_config
+
+        monkeypatch.setenv("AEGIS_TARGET_MODEL", "hosted-target")
+        config = load_config("aegis/config.hosted.yaml")
+
+        assert config["testbed"]["model"] == "hosted-target"
+        assert config["testbed"]["provider"]["model"] == "hosted-target"
+
+    def test_invalid_provider_mode_raises(self, tmp_path):
+        from aegis.config import load_config
+
+        custom = tmp_path / "bad-provider.yaml"
+        custom.write_text(
+            "testbed:\n"
+            "  model: test\n"
+            "  provider:\n"
+            "    mode: typo_provider\n"
+            "attacks:\n"
+            "  modules: []\n"
+            "evaluation:\n"
+            "  scorers: [rule_based]\n"
+            "defenses:\n"
+            "  active: []\n"
+            "reporting:\n"
+            "  formats: [json]\n",
+            encoding="utf-8",
+        )
+
+        with pytest.raises(ValueError, match="provider.mode"):
+            load_config(custom)
