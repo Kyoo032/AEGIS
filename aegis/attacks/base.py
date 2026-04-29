@@ -106,6 +106,12 @@ class BaseAttackModule(AttackModule):
 
         return results
 
+    def limit_payloads(self, max_count: int) -> None:
+        """Trim generated payloads to the first ``max_count`` entries."""
+        if self._payloads is None:
+            return
+        self._payloads = self._payloads[:max(0, int(max_count))]
+
     def get_metadata(self) -> dict[str, Any]:
         """Return module metadata for reporting."""
         return {

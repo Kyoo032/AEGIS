@@ -9,6 +9,7 @@ from typing import Any
 
 import pytest
 
+from aegis.attacks.base import BaseAttackModule
 from aegis.evaluation.llm_judge import LLMJudgeScorer
 from aegis.interfaces.agent import AgentInterface
 from aegis.interfaces.attack import AttackModule
@@ -96,6 +97,57 @@ def _make_attack_result(payload_id: str = "LLM01-TEST-001") -> AttackResult:
     )
 
 
+class _NoopAgent(AgentInterface):
+    def run(self, payload: AttackPayload) -> AgentResponse:
+        return AgentResponse(
+            payload_id=payload.id,
+            agent_profile="test",
+            messages=list(payload.messages),
+            final_output="ok",
+            tool_calls=[],
+        )
+
+    def reset(self) -> None:
+        return None
+
+    def get_config(self) -> dict[str, Any]:
+        return {"mcp_servers": []}
+
+    def enable_defense(self, defense_name: str, config: dict[str, Any]) -> None:
+        return None
+
+    def disable_defense(self, defense_name: str) -> None:
+        return None
+
+    def inject_context(self, context: str, method: str) -> None:
+        return None
+
+
+class _GeneratedAttack(BaseAttackModule):
+    owasp_id = "LLM01"
+    category = "Prompt Injection"
+
+    def __init__(self, name: str, payload_count: int) -> None:
+        super().__init__()
+        self.name = name
+        self._payload_count = payload_count
+
+    def generate_payloads(self, target_config: dict[str, Any]) -> list[AttackPayload]:
+        self._payloads = [
+            AttackPayload(
+                id=f"{self.name}-{idx}",
+                attack_module=self.name,
+                owasp_id=self.owasp_id,
+                category=self.category,
+                messages=[{"role": "user", "content": f"payload {idx}"}],
+                expected_behavior="test",
+                severity=Severity.HIGH,
+            )
+            for idx in range(self._payload_count)
+        ]
+        return list(self._payloads)
+
+
 def test_run_attacks_saves_jsonl(tmp_path: Path):
     """run_attacks() creates a JSONL file with valid AttackResult objects."""
     orchestrator = AEGISOrchestrator()
@@ -113,6 +165,39 @@ def test_run_attacks_saves_jsonl(tmp_path: Path):
         ar = AttackResult.model_validate_json(line)
         assert ar.payload.id
         assert ar.run_id
+
+
+def test_run_attacks_enforces_payloads_per_module(tmp_path: Path):
+    orchestrator = AEGISOrchestrator()
+    orchestrator.agent = _NoopAgent()
+    orchestrator.config["reporting"]["output_dir"] = str(tmp_path)
+    orchestrator.config["attacks"]["payloads_per_module"] = 1
+
+    results_path = orchestrator.run_attacks(attacks=[_GeneratedAttack("cap_one", 3)])
+
+    lines = results_path.read_text(encoding="utf-8").strip().splitlines()
+    assert len(lines) == 1
+    result = AttackResult.model_validate_json(lines[0])
+    assert result.payload.id == "cap_one-0"
+
+
+def test_run_attacks_applies_payload_cap_per_module(tmp_path: Path):
+    orchestrator = AEGISOrchestrator()
+    orchestrator.agent = _NoopAgent()
+    orchestrator.config["reporting"]["output_dir"] = str(tmp_path)
+    orchestrator.config["attacks"]["payloads_per_module"] = 2
+    attacks = [
+        _GeneratedAttack("module_a", 4),
+        _GeneratedAttack("module_b", 3),
+    ]
+
+    results_path = orchestrator.run_attacks(attacks=attacks)
+
+    payload_ids = [
+        AttackResult.model_validate_json(line).payload.id
+        for line in results_path.read_text(encoding="utf-8").strip().splitlines()
+    ]
+    assert payload_ids == ["module_a-0", "module_a-1", "module_b-0", "module_b-1"]
 
 
 def test_score_results_from_file(tmp_path: Path):

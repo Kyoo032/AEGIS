@@ -26,6 +26,7 @@ class TestRunScanHelpers:
         assert provider["api_key_env"] == "PROVIDER_API_KEY"
         assert provider["base_url"] == "https://api.example.com/v1"
         assert provider["model"] == "llama-test"
+        assert config["attacks"]["payloads_per_module"] == 3
         assert config["evaluation"]["scorers"] == ["rule_based"]
         assert config["reporting"]["output_dir"] == str(tmp_path)
 

@@ -63,7 +63,7 @@ def complete(prompt: str, config: dict[str, Any]) -> str:
 def _validated_base_url(base_url: str) -> str:
     parsed = parse_secretless_base_url(
         base_url,
-        allowed_schemes=frozenset({"http", "https"}),
+        allowed_schemes=frozenset({"https"}),
         label="OpenAI-compatible",
     )
     return parsed.geturl().rstrip("/")

@@ -28,6 +28,10 @@ class AttackModule(ABC):
         """Run all payloads against the agent, return results."""
         ...
 
+    def limit_payloads(self, max_count: int) -> None:
+        """Optionally trim generated payloads before execution."""
+        _ = max_count
+
     @abstractmethod
     def get_metadata(self) -> dict[str, Any]:
         """Return module metadata for reporting."""

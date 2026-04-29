@@ -147,3 +147,25 @@ class TestLoadConfig:
 
         with pytest.raises(ValueError, match="provider.mode"):
             load_config(custom)
+
+    def test_non_positive_payloads_per_module_raises(self, tmp_path):
+        from aegis.config import load_config
+
+        custom = tmp_path / "bad-payload-cap.yaml"
+        custom.write_text(
+            "testbed:\n"
+            "  model: test\n"
+            "attacks:\n"
+            "  modules: []\n"
+            "  payloads_per_module: 0\n"
+            "evaluation:\n"
+            "  scorers: [rule_based]\n"
+            "defenses:\n"
+            "  active: []\n"
+            "reporting:\n"
+            "  formats: [json]\n",
+            encoding="utf-8",
+        )
+
+        with pytest.raises(ValueError, match="attacks.payloads_per_module"):
+            load_config(custom)
