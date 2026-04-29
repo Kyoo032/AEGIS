@@ -73,6 +73,16 @@ class TestOpenAICompatProvider:
         with pytest.raises(ValueError, match="base_url"):
             openai_compat.complete("prompt", {"base_url": "file:///tmp/socket"})
 
+    def test_http_base_url_fails_before_request(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from aegis.interfaces import openai_compat
+
+        monkeypatch.setenv("PROVIDER_API_KEY", "secret-token")
+        with patch("aegis.interfaces.openai_compat.urlopen") as urlopen:
+            with pytest.raises(ValueError, match="HTTPS URL"):
+                openai_compat.complete("prompt", {"base_url": "http://api.example.test/v1"})
+
+        urlopen.assert_not_called()
+
     @pytest.mark.parametrize(
         "base_url",
         [

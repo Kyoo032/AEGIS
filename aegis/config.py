@@ -361,6 +361,13 @@ def _validate_nested(config: dict[str, Any], source_path: Path) -> None:
             f"{source_path}: 'testbed.provider.mode' must be one of "
             f"{sorted(_PROVIDER_MODES)}, got {provider_mode!r}."
         )
+    payloads_per_module = config["attacks"].get("payloads_per_module")
+    if (
+        isinstance(payloads_per_module, bool)
+        or not isinstance(payloads_per_module, int)
+        or payloads_per_module <= 0
+    ):
+        raise ValueError(f"{source_path}: 'attacks.payloads_per_module' must be a positive int.")
 
     number_keys = (
         ("testbed.provider.ollama_health_timeout_seconds", provider.get("ollama_health_timeout_seconds")),

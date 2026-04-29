@@ -1,37 +1,48 @@
+# Python caches and build artifacts
 __pycache__/
-*.pyc
+*.py[cod]
 *.pyo
 *.egg-info/
-dist/
-build/
-.eggs/
 *.egg
-.venv/
-.env
+.eggs/
+build/
+dist/
 .ruff_cache/
 .pytest_cache/
 .mypy_cache/
-*.db
 .coverage
 .deepeval/
+
+# Virtual environments and local dependency state
+.venv/
+.venv.broken-*/
+
+# Secrets and local environment files
+.env
+.env.*
+!.env.example
+*.db
+
+# Local Claude/Codex/operator planning files
 .claude/
 .codex
-.venv.broken-*/
-dashboard/__pycache__/
-output/
-tmp/
-
-# Local planning/operator notes; keep out of public releases.
+.codex/
+.mcp.local.json
+AGENTS.md
+CLAUDE.md
 TASK_PROMPTS.md
 claude.md
 plan.md
+*.local.md
 scripts/generate_app_summary_pdf.py
 scripts/render_pdf_page.py
 
-# Generated KB corpus (users run build_kb_corpus.py)
+# Generated knowledge-base, output, and temporary artifacts
 datasets/kb/
+output/
+tmp/
 
-# Ephemeral run artifacts
+# Ephemeral report/run artifacts
 reports/*.json
 reports/*.html
 reports/*.jsonl
@@ -39,7 +50,7 @@ reports/**/*.json
 reports/**/*.html
 reports/**/*.jsonl
 
-# Keep sample reports and GRC assessment
+# Curated public report samples
 !reports/sample_baseline_report.json
 !reports/sample_baseline_report.html
 !reports/AEGIS_Security_Assessment_Report.html

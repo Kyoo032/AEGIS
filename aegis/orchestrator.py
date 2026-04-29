@@ -212,6 +212,7 @@ class AEGISOrchestrator:
         """Execute attacks, save results to JSONL, return the file path."""
         if attacks is None:
             attacks = self._get_attacks()
+        payload_limit = self._payloads_per_module_limit()
 
         run_id = str(uuid4())
         output_dir = Path(self.config["reporting"].get("output_dir", "./reports"))
@@ -231,6 +232,8 @@ class AEGISOrchestrator:
                 module_name = getattr(attack, "name", attack.__class__.__name__)
                 try:
                     attack.generate_payloads(self.agent.get_config())
+                    if payload_limit > 0:
+                        attack.limit_payloads(payload_limit)
                 except Exception as exc:
                     err = _make_error_record(module=module_name, phase="generate_payloads", exc=exc)
                     errors.append(err)
@@ -260,6 +263,13 @@ class AEGISOrchestrator:
             len(errors),
         )
         return results_path
+
+    def _payloads_per_module_limit(self) -> int:
+        value = self.config.get("attacks", {}).get("payloads_per_module", 0)
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return 0
 
     def score_results(
         self,
