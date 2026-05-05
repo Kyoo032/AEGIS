@@ -20,22 +20,28 @@ from dashboard.utils.rate_limit import check_rate_limit
 from dashboard.utils.session_reports import get_session_report_dir
 
 _PROVIDER_CHOICES = {
-    "Generic chat-completions API": {
+    "OpenAI-compatible API": {
         "mode": "openai_compat",
-        "api_key_env": "PROVIDER_API_KEY",
-        "base_url": "https://api.example.com/v1",
+        "api_key_env": "OPENAI_API_KEY",
+        "base_url": "https://api.openai.com/v1",
         "model": "replace-with-provider-model",
     },
-    "Messages API shape": {
+    "Anthropic Messages API": {
         "mode": "anthropic",
-        "api_key_env": "PROVIDER_API_KEY",
+        "api_key_env": "ANTHROPIC_API_KEY",
         "base_url": "",
         "model": "replace-with-provider-model",
     },
-    "Hosted inference API shape": {
+    "Hugging Face Inference API": {
         "mode": "hf_inference",
-        "api_key_env": "PROVIDER_API_KEY",
+        "api_key_env": "HF_TOKEN",
         "base_url": "",
+        "model": "replace-with-provider-model",
+    },
+    "Company OpenAI-compatible gateway": {
+        "mode": "openai_compat",
+        "api_key_env": "ACME_LLM_API_KEY",
+        "base_url": "https://llm-gateway.example.com/v1",
         "model": "replace-with-provider-model",
     },
     "Demo offline": {

@@ -8,6 +8,17 @@ import pytest
 
 
 class TestRunScanHelpers:
+    def test_provider_choices_use_provider_specific_key_names(self) -> None:
+        from dashboard.pages.run_scan import _PROVIDER_CHOICES
+
+        assert _PROVIDER_CHOICES["OpenAI-compatible API"]["api_key_env"] == "OPENAI_API_KEY"
+        assert _PROVIDER_CHOICES["Anthropic Messages API"]["api_key_env"] == "ANTHROPIC_API_KEY"
+        assert _PROVIDER_CHOICES["Hugging Face Inference API"]["api_key_env"] == "HF_TOKEN"
+        assert (
+            _PROVIDER_CHOICES["Company OpenAI-compatible gateway"]["api_key_env"]
+            == "ACME_LLM_API_KEY"
+        )
+
     def test_build_scan_config_uses_hosted_provider_fields(self, tmp_path) -> None:
         from dashboard.pages.run_scan import _build_scan_config
 
@@ -133,7 +144,7 @@ class TestRunScanHelpers:
         fake_st = MagicMock()
         fake_st.form.return_value.__enter__.return_value = None
         fake_st.form.return_value.__exit__.return_value = False
-        fake_st.selectbox.return_value = "Generic chat-completions API"
+        fake_st.selectbox.return_value = "OpenAI-compatible API"
         fake_st.text_input.side_effect = ["replace-with-provider-model", "https://api.example.com/v1", "key"]
         fake_st.multiselect.return_value = ["llm01_prompt_inject"]
         fake_st.slider.return_value = 1

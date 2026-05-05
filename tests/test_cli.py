@@ -142,10 +142,10 @@ def test_guide_command_shows_practical_workflows():
 
     assert result.exit_code == 0
     assert "AEGIS first-time workflow" in result.output
-    assert "Recommended path: Docker Compose" in result.output
+    assert "Recommended path: Linux/WSL with uv" in result.output
     assert "Mental model" in result.output
-    assert "First Docker run, copy and paste" in result.output
-    assert "docker compose --profile local run --rm aegis scan" in result.output
+    assert "First Linux/WSL run, copy and paste" in result.output
+    assert "uv run aegis scan" in result.output
     assert "What to do next" in result.output
 
 

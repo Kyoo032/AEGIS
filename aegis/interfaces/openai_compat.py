@@ -11,7 +11,7 @@ from aegis.secret_safety import parse_secretless_base_url, secret_fingerprint
 
 def api_key_available(config: dict[str, Any]) -> tuple[bool, str]:
     """Return whether the configured API key environment variable is present."""
-    token_env = str(config.get("api_key_env", "PROVIDER_API_KEY"))
+    token_env = str(config.get("api_key_env", "OPENAI_API_KEY"))
     token = os.getenv(token_env)
     if token:
         return True, f"API key loaded from {token_env} ({secret_fingerprint(token)})"
@@ -20,7 +20,7 @@ def api_key_available(config: dict[str, Any]) -> tuple[bool, str]:
 
 def complete(prompt: str, config: dict[str, Any]) -> str:
     """Call an OpenAI-compatible chat completions endpoint."""
-    token_env = str(config.get("api_key_env", "PROVIDER_API_KEY"))
+    token_env = str(config.get("api_key_env", "OPENAI_API_KEY"))
     token = os.getenv(token_env)
     if not token:
         raise RuntimeError(f"OpenAI-compatible provider requires env {token_env}")

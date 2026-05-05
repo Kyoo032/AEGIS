@@ -112,7 +112,7 @@ class TestLoadConfig:
         config = load_config("aegis/config.hosted.yaml")
 
         assert config["testbed"]["provider"]["mode"] == "openai_compat"
-        assert config["testbed"]["provider"]["api_key_env"] == "PROVIDER_API_KEY"
+        assert config["testbed"]["provider"]["api_key_env"] == "OPENAI_API_KEY"
         assert config["evaluation"]["scorers"] == ["rule_based"]
         assert config["attacks"]["payloads_per_module"] <= 5
 

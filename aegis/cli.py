@@ -36,39 +36,33 @@ app = typer.Typer(
 
 GUIDE_TEXT = """AEGIS first-time workflow
 
-Recommended path: Docker Compose
-  Docker is the default way to run AEGIS because it keeps the scanner in a
-  non-root, read-only container with only the reports directory mounted writable.
+Recommended path: Linux/WSL with uv
+  Direct Linux/WSL execution is the primary build and validation path. Docker is
+  kept for later packaging after the direct runtime is stable.
 
 Before you start:
-  docker --version
-  docker compose version
+  python --version
+  uv --version
 
 Mental model:
   AEGIS sends adversarial prompts and tool-use scenarios to your target agent,
   scores what happened, then writes reports you can inspect.
 
-First Docker run, copy and paste:
-  1. Copy operator defaults:
-     cp .env.example .env
+First Linux/WSL run, copy and paste:
+  1. Install dependencies:
+     uv sync --extra dev --extra dashboard
 
-  2. Choose the Ollama model you want to test by editing .env:
-     OLLAMA_MODELS=<your-model>:<tag>
-     AEGIS_TARGET_MODEL=<your-model>:<tag>
-     # Optional: AEGIS_JUDGE_MODEL=<judge-model>:<tag>
+  2. Optional: choose a host Ollama model for this shell:
+     export AEGIS_TARGET_MODEL=<your-model>:<tag>
+     # Optional: export AEGIS_JUDGE_MODEL=<judge-model>:<tag>
 
-  3. Start the local Ollama service:
-     docker compose --profile local up -d ollama
-
-  4. Pull the model from .env into the Ollama container:
-     docker compose --profile local run --rm ollama-init
-
-  5. Run a baseline scan:
-     docker compose --profile local run --rm aegis scan \\
+  3. Run a baseline scan:
+     uv run aegis scan \\
+       --config aegis/config.local_single_qwen.yaml \\
        --format json \\
-       --output /app/reports/first-run
+       --output reports/first-run
 
-  6. Open the generated JSON report on your host:
+  4. Open the generated JSON report:
      reports/first-run/baseline.json
 
 How to read the result:
@@ -78,32 +72,31 @@ How to read the result:
 
 What to do next:
   If you want a human-readable report:
-    docker compose run --rm aegis report \\
+    uv run aegis report \\
       --input reports/first-run/baseline.json \\
       --format html \\
       --output reports/first-run/baseline.html
 
   If one area looks risky, run only that attack module:
-    docker compose --profile local run --rm aegis attack \\
+    uv run aegis attack \\
       --module llm01_prompt_inject \\
-      --output /app/reports/prompt-injection
+      --output reports/prompt-injection
 
   If you want to test one guardrail:
-    docker compose --profile local run --rm aegis defend \\
+    uv run aegis defend \\
       --defense tool_boundary \\
-      --output /app/reports/tool-boundary
+      --output reports/tool-boundary
 
   If you want a full baseline-vs-defense comparison:
-    docker compose --profile local run --rm aegis matrix \\
-      --output /app/reports/defense-matrix
+    uv run aegis matrix \\
+      --output reports/defense-matrix
 
-Local Python fallback:
-  Use this only when you intentionally want to run outside Docker:
-    uv sync --dev
-    ollama pull <your-model>:<tag>
-    export AEGIS_TARGET_MODEL=<your-model>:<tag>
-    uv run aegis scan \\
-      --output reports/first-run
+Hosted provider keys:
+  Direct Linux/WSL runs read process environment variables. They do not
+  read .env files by default unless you explicitly source one.
+    export OPENAI_API_KEY=<your-openai-or-compatible-key>
+    export ANTHROPIC_API_KEY=<your-anthropic-key>
+    export HF_TOKEN=<your-hugging-face-token>
 
 Command map:
   guide   Shows this first-time workflow.
@@ -123,8 +116,8 @@ Important options:
 
 Need names for modules or defenses?
   Run an invalid name once and AEGIS will print the available choices:
-    docker compose run --rm aegis attack --module does_not_exist
-    docker compose run --rm aegis defend --defense does_not_exist
+    uv run aegis attack --module does_not_exist
+    uv run aegis defend --defense does_not_exist
 """
 
 

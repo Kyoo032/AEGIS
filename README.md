@@ -23,20 +23,20 @@
 
 AEGIS is a **red-team framework for LLM agents**. It fires adversarial payloads at a target model, watches how the agent reacts, scores the outcome with deterministic rules and optional LLM-judge confirmation, and emits a structured report you can audit.
 
-It is built for AI teams at companies shipping agents, MCP servers, RAG systems, and tool-using assistants. The default workflow is local and Docker-first so teams can test private models and internal tooling before a launch review.
+It is built for AI teams at companies shipping agents, MCP servers, RAG systems, and tool-using assistants. The default workflow is Linux/WSL-first so teams can build, validate, and integrate directly before packaging with Docker.
 
 It is designed for the reality of modern agentic systems: tool use, MCP servers, RAG, multi-turn conversations, and the gap between "the model refuses" and "the agent still does the dangerous thing."
 
-> **Latest validation:** the Docker + Ollama path was tested with `qwen3.5:0.8b` — 191 payloads, **75.39% overall ASR** (Attack Success Rate). See [baseline.json](reports/baseline.json).
+> **Latest validation:** the local Ollama path was tested with `qwen3.5:0.8b` — 191 payloads, **75.39% overall ASR** (Attack Success Rate). See [baseline.json](reports/baseline.json).
 
 ## How AEGIS Works
 
 ```mermaid
 flowchart LR
-    U["You choose a model"] --> E[".env or config.yaml"]
-    E --> D["Docker Compose"]
-    D --> O["Ollama or provider"]
-    D --> A["AEGIS scanner"]
+    U["You choose a model"] --> E["shell env + config.yaml"]
+    E --> R["Linux/WSL runtime"]
+    R --> O["Ollama or hosted provider"]
+    R --> A["AEGIS scanner"]
     A --> P["Attack payloads"]
     P --> T["Testbed agent"]
     T --> O
@@ -64,50 +64,50 @@ flowchart LR
 
 ## 🚀 Quick Start
 
-**For most users, use Docker.** It avoids local Python setup and keeps the scanner in a non-root, read-only container. The only writable mount is `./reports`, where scan output is saved.
+**For most users, start with Linux or WSL.** This is the primary build and validation path. Docker is kept as a packaging option after the direct runtime is stable.
 
 ### Prerequisites
 
-- Docker Desktop or Docker Engine with Docker Compose v2
-- Enough disk space for the runtime image and whichever local model you choose
+- Linux or WSL with Python 3.11+
+- [`uv`](https://docs.astral.sh/uv/) for dependency and command execution
+- Optional: Ollama for local model runs
+- Optional: a hosted provider key for OpenAI/OpenAI-compatible, Anthropic, Hugging Face, or a company gateway
 
-### Install And Run With Docker
+### Install And Run On Linux/WSL
 
-**1. Clone the repo and copy the example environment file.**
+**1. Clone the repo and install dependencies.**
 
 ```bash
 git clone https://github.com/Kyoo032/AEGIS.git
 cd AEGIS
-cp .env.example .env
+uv sync --extra dev --extra dashboard
 ```
 
-**2. Choose the model to test.** Edit `.env`:
-
-```dotenv
-OLLAMA_MODELS=<your-model>:<tag>
-AEGIS_TARGET_MODEL=<your-model>:<tag>
-# Optional: use a separate judge model
-# AEGIS_JUDGE_MODEL=<judge-model>:<tag>
-```
-
-**3. Start the internal Ollama service and pull the model from `.env`.**
+**2. Confirm the CLI is available.**
 
 ```bash
-docker compose --profile local up -d ollama
-docker compose --profile local run --rm ollama-init
+uv run aegis guide
 ```
 
-**4. Run the baseline scan.**
+**3. Run a local baseline scan.**
 
 ```bash
-docker compose --profile local run --rm aegis scan \
+uv run aegis scan \
+  --config aegis/config.local_single_qwen.yaml \
   --format json \
-  --output /app/reports/first-run
+  --output reports/first-run
 ```
 
-**5. Open the report on your host.**
+**4. Open the report.**
 
-The first report is written to `reports/first-run/baseline.json`.
+The first report is written to `reports/first-run/baseline.json`. Render HTML when you want a meeting-friendly artifact:
+
+```bash
+uv run aegis report \
+  --input reports/first-run/baseline.json \
+  --format html \
+  --output reports/first-run/baseline.html
+```
 
 | Result | Meaning |
 |---|---|
@@ -115,62 +115,59 @@ The first report is written to `reports/first-run/baseline.json`.
 | Exit code `2` | Scan completed and vulnerabilities were found. Review the report. |
 | Exit code `1` | Setup, config, provider, or report rendering failed. |
 
-**First command to remember:** `docker compose --profile local run --rm aegis guide`
+**First command to remember:** `uv run aegis guide`
 
-### Docker CLI Commands
+### Linux/WSL CLI Commands
 
 Use these after the first scan:
 
 ```bash
-docker compose --profile local run --rm aegis guide
-docker compose --profile local run --rm aegis attack --module asi_dynamic_cloak
-docker compose --profile local run --rm aegis defend --defense input_validator
-docker compose --profile local run --rm aegis matrix --output /app/reports/defense-matrix
-docker compose run --rm aegis report \
+uv run aegis guide
+uv run aegis attack --module asi_dynamic_cloak
+uv run aegis defend --defense input_validator
+uv run aegis matrix --output reports/defense-matrix
+uv run aegis report \
   --input reports/first-run/baseline.json \
   --format html \
   --output reports/first-run/baseline.html
 ```
 
-### Local Python Fallback
+### Dashboard
 
-Use this only when you intentionally want to run outside Docker:
+The dashboard is optional and local-first:
 
 ```bash
-uv sync --dev
-ollama pull <your-model>:<tag>
-export AEGIS_TARGET_MODEL=<your-model>:<tag>
-uv run aegis scan \
-  --format json \
-  --output reports/local-model
+uv run streamlit run dashboard/app.py
 ```
+
+The Run Scan page accepts a temporary BYOK value for hosted providers. The key is placed in process environment only for the scan and restored or removed afterwards.
 
 ## CLI Usage
 
-**Use Docker Compose by default.** These help commands are the fastest way to discover options without leaving the terminal:
+Use the direct Linux/WSL commands by default. These help commands are the fastest way to discover options without leaving the terminal:
 
 ```bash
-docker compose --profile local run --rm aegis guide
-docker compose --profile local run --rm aegis --help
-docker compose --profile local run --rm aegis scan --help
-docker compose --profile local run --rm aegis attack --help
-docker compose --profile local run --rm aegis defend --help
-docker compose --profile local run --rm aegis matrix --help
-docker compose run --rm aegis report --help
+uv run aegis guide
+uv run aegis --help
+uv run aegis scan --help
+uv run aegis attack --help
+uv run aegis defend --help
+uv run aegis matrix --help
+uv run aegis report --help
 ```
 
-For a first-time user, start with `docker compose --profile local run --rm aegis guide`. It explains the mental model, gives a copy/paste first scan, shows where the report is written, and suggests the next command based on what you want to investigate.
+For a first-time user, start with `uv run aegis guide`. It explains the mental model, gives a copy/paste first scan, shows where the report is written, and suggests the next command based on what you want to investigate.
 
 ### Which Command Should I Use?
 
 | Goal | Command |
 |---|---|
-| **I am new and need the guided path.** | `docker compose --profile local run --rm aegis guide` |
-| **Run the full baseline attack suite.** | `docker compose --profile local run --rm aegis scan` |
-| **Debug one attack category.** | `docker compose --profile local run --rm aegis attack --module <name>` |
-| **Test one guardrail.** | `docker compose --profile local run --rm aegis defend --defense <name>` |
-| **Compare multiple defenses.** | `docker compose --profile local run --rm aegis matrix` |
-| **Convert JSON to HTML.** | `docker compose run --rm aegis report --input <report.json> --format html` |
+| **I am new and need the guided path.** | `uv run aegis guide` |
+| **Run the full baseline attack suite.** | `uv run aegis scan` |
+| **Debug one attack category.** | `uv run aegis attack --module <name>` |
+| **Test one guardrail.** | `uv run aegis defend --defense <name>` |
+| **Compare multiple defenses.** | `uv run aegis matrix` |
+| **Convert JSON to HTML.** | `uv run aegis report --input <report.json> --format html` |
 
 ### Command reference
 
@@ -187,19 +184,16 @@ For a first-time user, start with `docker compose --profile local run --rm aegis
 
 ```bash
 # Pick a config file
-docker compose --profile local run --rm \
-  -v "$(pwd)/aegis/config.my_model.yaml:/config/config.yaml:ro" \
-  -e AEGIS_CONFIG_PATH=/config/config.yaml \
-  aegis scan
+uv run aegis scan --config aegis/config.my_model.yaml
 
 # Choose report format
-docker compose --profile local run --rm aegis scan --format html
+uv run aegis scan --format html
 
 # Write all scan artifacts and rendered reports to a directory
-docker compose --profile local run --rm aegis scan --output /app/reports/local-model
+uv run aegis scan --output reports/local-model
 
 # Re-render a JSON report to a specific HTML file
-docker compose run --rm aegis report \
+uv run aegis report \
   --input reports/local-model/baseline.json \
   --format html \
   --output reports/local-model/baseline.html
@@ -222,47 +216,47 @@ Exit code `2` is expected for vulnerable targets. In CI, treat it as a security 
 The CLI validates names against your active config. If you use an invalid name, AEGIS prints the available choices:
 
 ```bash
-docker compose --profile local run --rm aegis attack --module does_not_exist
-docker compose --profile local run --rm aegis defend --defense does_not_exist
+uv run aegis attack --module does_not_exist
+uv run aegis defend --defense does_not_exist
 ```
 
 Then run a focused command with one of the listed names:
 
 ```bash
-docker compose --profile local run --rm aegis attack --module llm01_prompt_inject --output /app/reports/prompt-injection
-docker compose --profile local run --rm aegis defend --defense tool_boundary --output /app/reports/tool-boundary
+uv run aegis attack --module llm01_prompt_inject --output reports/prompt-injection
+uv run aegis defend --defense tool_boundary --output reports/tool-boundary
 ```
 
 ### Recommended workflows
 
-For Docker local-model validation:
+For Linux/WSL local-model validation:
 
 ```bash
-docker compose --profile local run --rm aegis scan \
+uv run aegis scan \
   --format json \
-  --output /app/reports/local-model
+  --output reports/local-model
 ```
 
 For a targeted module loop:
 
 ```bash
-docker compose --profile local run --rm aegis attack \
+uv run aegis attack \
   --module asi02_tool_misuse \
-  --output /app/reports/asi02
+  --output reports/asi02
 ```
 
 For defense comparison:
 
 ```bash
-docker compose --profile local run --rm aegis matrix \
+uv run aegis matrix \
   --format json \
-  --output /app/reports/defense-matrix
+  --output reports/defense-matrix
 ```
 
 For HTML review after a JSON scan:
 
 ```bash
-docker compose run --rm aegis report \
+uv run aegis report \
   --input reports/local-model/baseline.json \
   --format html \
   --output reports/local-model/baseline.html
@@ -270,7 +264,7 @@ docker compose run --rm aegis report \
 
 ## Hosted Provider Config
 
-Docker remains the default install path. Hosted providers are useful for pilots, quick demos, or teams that already run their target model behind an API. Use one generic template and set the API shape, base URL, key environment variable, and model for your provider.
+Hosted providers are useful for pilots, quick demos, or teams that already run their target model behind an API. Use one generic template and set the API shape, base URL, key environment variable, and model for your provider.
 
 1. Copy or edit the hosted template:
 
@@ -288,24 +282,31 @@ cp aegis/config.hosted.yaml aegis/config.my_provider.yaml
 | `testbed.provider.model` | The target model identifier exposed by your provider |
 | `timeout_seconds` / `max_tokens` | Provider call limits for the scan |
 
-3. Export your key locally, then run the scan:
+3. Export your key in the current shell, then run the scan:
 
 ```bash
-read -rsp "Provider API key: " PROVIDER_API_KEY
-export PROVIDER_API_KEY
+read -rsp "OpenAI API key: " OPENAI_API_KEY
+export OPENAI_API_KEY
 echo
-docker compose run --rm \
-  -v "$(pwd)/aegis/config.my_provider.yaml:/config/config.yaml:ro" \
-  aegis scan \
-  --config /config/config.yaml \
-  --output /app/reports/hosted-provider
+uv run aegis scan \
+  --config aegis/config.my_provider.yaml \
+  --output reports/hosted-provider
 ```
 
-The Docker service passes `PROVIDER_API_KEY` into the container for this template. If you choose a different `api_key_env`, pass it explicitly with `docker compose run --rm -e YOUR_KEY_ENV ...`. The template keeps scoring rule-based by default to avoid requiring a separate judge provider. Keep API keys in environment variables, not YAML.
+Provider-specific examples:
 
-## Docker Deployment
+| Provider | Mode | Env var example |
+|---|---|---|
+| OpenAI or OpenAI-compatible | `openai_compat` | `OPENAI_API_KEY` |
+| Anthropic | `anthropic` | `ANTHROPIC_API_KEY` |
+| Hugging Face Inference | `hf_inference` | `HF_TOKEN` |
+| Company gateway | `openai_compat` | `ACME_LLM_API_KEY` |
 
-The repo ships with a hardened Docker Compose setup for operators who want to run AEGIS without installing Python or `uv` locally.
+The template keeps scoring rule-based by default to avoid requiring a separate judge provider. Keep API keys in environment variables, not YAML, reports, logs, issues, or backlog notes.
+
+## Packaging With Docker
+
+Docker is a deferred packaging path after the direct Linux/WSL workflow is stable. The repo ships with a hardened Docker Compose setup for operators who want a reproducible packaged runtime.
 
 The default container posture is intentionally conservative:
 
@@ -461,24 +462,15 @@ The latest defense-matrix analysis lives in [DEFENSE_EVALUATION.md](docs/DEFENSE
 
 ## 🔌 Integrate Your Own Model
 
-AEGIS accepts any model exposed through the supported providers. The fastest Docker path is to point the bundled Ollama service at your model through `.env`.
+AEGIS accepts any model exposed through the supported providers. The primary path is direct Linux/WSL execution with explicit config files and shell environment variables.
 
-### Option A — Ollama in Docker (recommended, local)
+### Option A — Ollama on Linux/WSL
 
-```dotenv
-OLLAMA_MODELS=<your-model>:<tag>
-AEGIS_TARGET_MODEL=<your-model>:<tag>
-# Optional: use a separate, stronger judge
-# AEGIS_JUDGE_MODEL=<judge-model>:<tag>
-```
+Start Ollama on the host and pull your target model:
 
 ```bash
-docker compose --profile local up -d ollama
-docker compose --profile local run --rm ollama-init
-docker compose --profile local run --rm aegis scan --output /app/reports/my-model
+ollama pull <your-model>:<tag>
 ```
-
-### Option B — Ollama outside Docker
 
 Create `aegis/config.my_model.yaml`:
 
@@ -510,7 +502,15 @@ Run it:
 uv run aegis scan --config aegis/config.my_model.yaml
 ```
 
-### Option C — Hosted APIs
+You can also override models for the current shell:
+
+```bash
+export AEGIS_TARGET_MODEL=<your-model>:<tag>
+export AEGIS_JUDGE_MODEL=<judge-model>:<tag>
+uv run aegis scan --config aegis/config.local_single_qwen.yaml
+```
+
+### Option B — Hosted APIs
 
 Use one of the built-in hosted provider modes when your model is already behind an API.
 
@@ -519,8 +519,8 @@ testbed:
   model: "<provider-model>"
   provider:
     mode: "openai_compat"      # openai_compat | anthropic | hf_inference
-    api_key_env: "PROVIDER_API_KEY"
-    base_url: "https://api.example.com/v1"
+    api_key_env: "OPENAI_API_KEY"
+    base_url: "https://api.openai.com/v1"
     model: "<provider-model>"
     timeout_seconds: 60
     max_tokens: 512
@@ -530,7 +530,18 @@ evaluation:
   scorers: [rule_based]
 ```
 
-Read the key into an environment variable for the current shell session; do not paste raw keys into docs, config files, or issue/backlog notes.
+Read the key into an environment variable for the current shell session; do not paste raw keys into docs, config files, reports, logs, issues, or backlog notes.
+
+```bash
+export OPENAI_API_KEY=<your-openai-or-compatible-key>
+uv run aegis scan --config aegis/config.hosted.yaml --output reports/hosted-provider
+```
+
+For Anthropic, set `mode: "anthropic"` and `api_key_env: "ANTHROPIC_API_KEY"`. For Hugging Face, set `mode: "hf_inference"` and `api_key_env: "HF_TOKEN"`. For a company OpenAI-compatible gateway, set `mode: "openai_compat"`, `api_key_env: "ACME_LLM_API_KEY"`, and your gateway `base_url`.
+
+### Option C — Docker packaging
+
+Docker packaging remains available after the direct Linux/WSL path is stable. See [Packaging With Docker](#packaging-with-docker).
 
 ### Option D — Custom providers
 
@@ -557,11 +568,13 @@ Some reasoning models can return an empty `response` on Ollama's `/api/generate`
 
 ```bash
 uv run ruff check .
-uv run --extra dashboard pytest -s --cov=aegis --cov-report=term-missing --cov-fail-under=80
+uv run pyright
+uv run pytest -p no:rerunfailures -s
 AEGIS_TARGET_MODEL=<your-model>:<tag> uv run aegis scan --format json --output reports
 ```
 
 - Dashboard tests require the `dashboard` extra (`plotly`, `pandas`, `streamlit`).
+- Hosted-provider validation should include a missing-key failure check and a fake-key secret search over generated reports.
 - CLI exit codes: `0` clean · `1` runtime error · `2` vulnerabilities found.
 - Artifacts in `reports/` are intentionally local; not all are tracked in Git.
 
@@ -598,7 +611,7 @@ tests/               # 785 tests, 88.8% coverage
 |---|---|
 | [FINDINGS.md](docs/FINDINGS.md) | Fresh baseline results and local-run observations |
 | [METHODOLOGY.md](docs/METHODOLOGY.md) | Scoring, local execution path, reproducibility notes |
-| [COMPANY_QUICKSTART.md](docs/COMPANY_QUICKSTART.md) | 10-minute Docker-first workflow for company AI teams |
+| [COMPANY_QUICKSTART.md](docs/COMPANY_QUICKSTART.md) | 10-minute Linux/WSL-first workflow for company AI teams |
 | [MCP_TOOL_SECURITY.md](docs/MCP_TOOL_SECURITY.md) | Practical MCP/tool security guidance and AEGIS module mapping |
 | [DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md) | Short demo flow for launch calls and videos |
 | [LAUNCH_COPY.md](docs/LAUNCH_COPY.md) | Public launch copy, audience, and positioning |
@@ -612,7 +625,7 @@ tests/               # 785 tests, 88.8% coverage
 
 Issues and pull requests welcome — especially new attack modules and defense strategies. Please:
 
-1. Run `uv run ruff check .` and `pytest` before submitting.
+1. Run `uv run ruff check .`, `uv run pyright`, and `uv run pytest -p no:rerunfailures -s` before submitting.
 2. Keep coverage at or above 80%.
 3. Include a payload rationale and expected scoring signal for new attacks.
 

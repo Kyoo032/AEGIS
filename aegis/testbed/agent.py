@@ -591,8 +591,14 @@ class DefaultAgent(AgentInterface):
     def _hosted_api_key_env(self, mode: str, provider_cfg: dict[str, Any]) -> str:
         if provider_cfg.get("api_key_env"):
             return str(provider_cfg["api_key_env"])
+        if mode == "openai_compat":
+            return "OPENAI_API_KEY"
+        if mode == "anthropic":
+            return "ANTHROPIC_API_KEY"
         if mode == "hf_inference" and provider_cfg.get("hf_token_env"):
             return str(provider_cfg["hf_token_env"])
+        if mode == "hf_inference":
+            return "HF_TOKEN"
         return "PROVIDER_API_KEY"
 
     def _check_ollama_health(self) -> tuple[bool, str]:

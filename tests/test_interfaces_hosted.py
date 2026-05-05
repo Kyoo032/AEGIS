@@ -20,7 +20,7 @@ class TestOpenAICompatProvider:
     def test_api_key_available_uses_hash_not_raw_secret(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from aegis.interfaces import openai_compat
 
-        monkeypatch.setenv("PROVIDER_API_KEY", "test-secret-token")
+        monkeypatch.setenv("OPENAI_API_KEY", "test-secret-token")
 
         available, note = openai_compat.api_key_available({})
 
@@ -31,7 +31,7 @@ class TestOpenAICompatProvider:
     def test_complete_parses_chat_completion(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from aegis.interfaces import openai_compat
 
-        monkeypatch.setenv("PROVIDER_API_KEY", "secret-token")
+        monkeypatch.setenv("OPENAI_API_KEY", "secret-token")
         captured = {}
 
         def _urlopen(request, timeout):
@@ -60,23 +60,34 @@ class TestOpenAICompatProvider:
     def test_missing_key_fails_without_secret_value(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from aegis.interfaces import openai_compat
 
-        monkeypatch.delenv("PROVIDER_API_KEY", raising=False)
-        with pytest.raises(RuntimeError, match="PROVIDER_API_KEY") as exc:
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        with pytest.raises(RuntimeError, match="OPENAI_API_KEY") as exc:
             openai_compat.complete("prompt", {})
 
         assert "secret" not in str(exc.value).lower()
 
+    def test_configured_key_env_still_supported(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from aegis.interfaces import openai_compat
+
+        monkeypatch.setenv("ACME_LLM_API_KEY", "test-secret-token")
+
+        available, note = openai_compat.api_key_available({"api_key_env": "ACME_LLM_API_KEY"})
+
+        assert available is True
+        assert "ACME_LLM_API_KEY" in note
+        assert "test-secret-token" not in note
+
     def test_invalid_base_url_fails_before_request(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from aegis.interfaces import openai_compat
 
-        monkeypatch.setenv("PROVIDER_API_KEY", "secret-token")
+        monkeypatch.setenv("OPENAI_API_KEY", "secret-token")
         with pytest.raises(ValueError, match="base_url"):
             openai_compat.complete("prompt", {"base_url": "file:///tmp/socket"})
 
     def test_http_base_url_fails_before_request(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from aegis.interfaces import openai_compat
 
-        monkeypatch.setenv("PROVIDER_API_KEY", "secret-token")
+        monkeypatch.setenv("OPENAI_API_KEY", "secret-token")
         with patch("aegis.interfaces.openai_compat.urlopen") as urlopen:
             with pytest.raises(ValueError, match="HTTPS URL"):
                 openai_compat.complete("prompt", {"base_url": "http://api.example.test/v1"})
@@ -99,7 +110,7 @@ class TestOpenAICompatProvider:
     ) -> None:
         from aegis.interfaces import openai_compat
 
-        monkeypatch.setenv("PROVIDER_API_KEY", "secret-token")
+        monkeypatch.setenv("OPENAI_API_KEY", "secret-token")
         with pytest.raises(ValueError, match="credentials|query|fragments"):
             openai_compat.complete("prompt", {"base_url": base_url})
 
@@ -108,7 +119,7 @@ class TestAnthropicProvider:
     def test_api_key_available_uses_hash_not_raw_secret(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from aegis.interfaces import anthropic
 
-        monkeypatch.setenv("PROVIDER_API_KEY", "test-secret-token")
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "test-secret-token")
 
         available, note = anthropic.api_key_available({})
 
@@ -119,7 +130,7 @@ class TestAnthropicProvider:
     def test_complete_parses_messages_response(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from aegis.interfaces import anthropic
 
-        monkeypatch.setenv("PROVIDER_API_KEY", "secret-token")
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "secret-token")
         with patch(
             "aegis.interfaces.anthropic.urlopen",
             return_value=_response({"content": [{"type": "text", "text": "anthropic answer"}]}),
@@ -131,8 +142,8 @@ class TestAnthropicProvider:
     def test_missing_key_fails_without_secret_value(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from aegis.interfaces import anthropic
 
-        monkeypatch.delenv("PROVIDER_API_KEY", raising=False)
-        with pytest.raises(RuntimeError, match="PROVIDER_API_KEY") as exc:
+        monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+        with pytest.raises(RuntimeError, match="ANTHROPIC_API_KEY") as exc:
             anthropic.complete("prompt", {})
 
         assert "secret" not in str(exc.value).lower()
@@ -142,7 +153,7 @@ class TestHFInferenceProvider:
     def test_api_key_available_uses_hash_not_raw_secret(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from aegis.interfaces import hf_inference
 
-        monkeypatch.setenv("PROVIDER_API_KEY", "test-secret-token")
+        monkeypatch.setenv("HF_TOKEN", "test-secret-token")
 
         available, note = hf_inference.api_key_available({})
 
@@ -153,7 +164,7 @@ class TestHFInferenceProvider:
     def test_complete_parses_generated_text(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from aegis.interfaces import hf_inference
 
-        monkeypatch.setenv("PROVIDER_API_KEY", "secret-token")
+        monkeypatch.setenv("HF_TOKEN", "secret-token")
         with patch(
             "aegis.interfaces.hf_inference.urlopen",
             return_value=_response([{"generated_text": "hf answer"}]),
@@ -165,8 +176,8 @@ class TestHFInferenceProvider:
     def test_missing_key_fails_without_secret_value(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from aegis.interfaces import hf_inference
 
-        monkeypatch.delenv("PROVIDER_API_KEY", raising=False)
-        with pytest.raises(RuntimeError, match="PROVIDER_API_KEY") as exc:
+        monkeypatch.delenv("HF_TOKEN", raising=False)
+        with pytest.raises(RuntimeError, match="HF_TOKEN") as exc:
             hf_inference.complete("prompt", {})
 
         assert "secret" not in str(exc.value).lower()

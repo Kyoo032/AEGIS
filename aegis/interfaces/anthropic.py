@@ -11,7 +11,7 @@ from aegis.secret_safety import secret_fingerprint
 
 def api_key_available(config: dict[str, Any]) -> tuple[bool, str]:
     """Return whether the configured API key environment variable is present."""
-    token_env = str(config.get("api_key_env", "PROVIDER_API_KEY"))
+    token_env = str(config.get("api_key_env", "ANTHROPIC_API_KEY"))
     token = os.getenv(token_env)
     if token:
         return True, f"API key loaded from {token_env} ({secret_fingerprint(token)})"
@@ -20,7 +20,7 @@ def api_key_available(config: dict[str, Any]) -> tuple[bool, str]:
 
 def complete(prompt: str, config: dict[str, Any]) -> str:
     """Call Anthropic's Messages API."""
-    token_env = str(config.get("api_key_env", "PROVIDER_API_KEY"))
+    token_env = str(config.get("api_key_env", "ANTHROPIC_API_KEY"))
     token = os.getenv(token_env)
     if not token:
         raise RuntimeError(f"Anthropic provider requires env {token_env}")

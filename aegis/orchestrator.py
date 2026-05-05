@@ -212,6 +212,7 @@ class AEGISOrchestrator:
         """Execute attacks, save results to JSONL, return the file path."""
         if attacks is None:
             attacks = self._get_attacks()
+        self._preflight_agent_provider()
         payload_limit = self._payloads_per_module_limit()
 
         run_id = str(uuid4())
@@ -263,6 +264,10 @@ class AEGISOrchestrator:
             len(errors),
         )
         return results_path
+
+    def _preflight_agent_provider(self) -> None:
+        """Initialize the agent once so provider/key failures happen before attack execution."""
+        self.agent.get_config()
 
     def _payloads_per_module_limit(self) -> int:
         value = self.config.get("attacks", {}).get("payloads_per_module", 0)
