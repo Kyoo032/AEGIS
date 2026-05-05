@@ -1,6 +1,6 @@
 # AEGIS hosted provider template.
 # Copy or edit this file for any hosted model provider:
-#   aegis scan --config aegis/config.hosted.yaml
+#   uv run aegis scan --config aegis/config.hosted.yaml
 #
 # Choose provider.mode based on the API shape:
 #   openai_compat  - chat/completions-compatible APIs
@@ -13,8 +13,8 @@ testbed:
   model: replace-with-provider-model
   provider:
     mode: openai_compat
-    api_key_env: PROVIDER_API_KEY
-    base_url: https://api.example.com/v1
+    api_key_env: OPENAI_API_KEY
+    base_url: https://api.openai.com/v1
     model: replace-with-provider-model
     timeout_seconds: 60
     max_tokens: 512

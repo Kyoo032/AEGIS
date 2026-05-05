@@ -12,7 +12,7 @@ from aegis.secret_safety import secret_fingerprint
 
 def api_key_available(config: dict[str, Any]) -> tuple[bool, str]:
     """Return whether the configured API key environment variable is present."""
-    token_env = str(config.get("api_key_env") or config.get("hf_token_env") or "PROVIDER_API_KEY")
+    token_env = str(config.get("api_key_env") or config.get("hf_token_env") or "HF_TOKEN")
     token = os.getenv(token_env)
     if token:
         return True, f"API key loaded from {token_env} ({secret_fingerprint(token)})"
@@ -21,7 +21,7 @@ def api_key_available(config: dict[str, Any]) -> tuple[bool, str]:
 
 def complete(prompt: str, config: dict[str, Any]) -> str:
     """Call the Hugging Face hosted Inference API."""
-    token_env = str(config.get("api_key_env") or config.get("hf_token_env") or "PROVIDER_API_KEY")
+    token_env = str(config.get("api_key_env") or config.get("hf_token_env") or "HF_TOKEN")
     token = os.getenv(token_env)
     if not token:
         raise RuntimeError(f"Hugging Face Inference provider requires env {token_env}")

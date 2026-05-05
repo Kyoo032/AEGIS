@@ -1,32 +1,46 @@
 # AEGIS Demo Script
 
-Use this for a short company demo or launch recording.
+Use this for a short company demo or launch recording. The demo is Linux/WSL-first; Docker is packaging work after the direct path is stable.
 
 ## Setup
 
 ```bash
-cp .env.example .env
-# edit .env with OLLAMA_MODELS and AEGIS_TARGET_MODEL
+git clone https://github.com/Kyoo032/AEGIS.git
+cd AEGIS
+uv sync --extra dev --extra dashboard
+```
 
-docker compose --profile local up -d ollama
-docker compose --profile local run --rm ollama-init
+For a local Ollama model, make sure Ollama is running on the host and pull the model you want to test:
+
+```bash
+ollama pull <your-model>:<tag>
+export AEGIS_TARGET_MODEL=<your-model>:<tag>
+```
+
+For hosted providers, export the relevant key in the shell:
+
+```bash
+export OPENAI_API_KEY=<your-openai-or-compatible-key>
+# or: export ANTHROPIC_API_KEY=<your-anthropic-key>
+# or: export HF_TOKEN=<your-hugging-face-token>
 ```
 
 ## Talk Track
 
-1. AEGIS is a Docker-first red-team toolkit for teams shipping agents, MCP servers, and tool-using AI.
+1. AEGIS is a Linux/WSL-first red-team toolkit for teams shipping agents, MCP servers, RAG systems, and tool-using AI.
 2. The first command is the guide:
 
 ```bash
-docker compose --profile local run --rm aegis guide
+uv run aegis guide
 ```
 
 3. Run a baseline scan:
 
 ```bash
-docker compose --profile local run --rm aegis scan \
+uv run aegis scan \
+  --config aegis/config.local_single_qwen.yaml \
   --format json \
-  --output /app/reports/demo-baseline
+  --output reports/demo-baseline
 ```
 
 4. Explain exit code `2`: the scan completed and found vulnerabilities.
@@ -34,19 +48,25 @@ docker compose --profile local run --rm aegis scan \
 6. Run one focused module:
 
 ```bash
-docker compose --profile local run --rm aegis attack \
+uv run aegis attack \
   --module asi02_tool_misuse \
-  --output /app/reports/demo-asi02
+  --output reports/demo-asi02
 ```
 
 7. Run a defense comparison:
 
 ```bash
-docker compose --profile local run --rm aegis matrix \
+uv run aegis matrix \
   --format json \
-  --output /app/reports/demo-matrix
+  --output reports/demo-matrix
+```
+
+8. Optional: open the local dashboard.
+
+```bash
+uv run streamlit run dashboard/app.py
 ```
 
 ## Close
 
-AEGIS gives teams a repeatable way to find agentic AI risks before customers do: baseline, focus, defend, compare, and ship with evidence.
+AEGIS gives teams a repeatable way to find agentic AI risks before customers do: baseline, focus, defend, compare, and ship with evidence. API keys stay in environment variables or temporary dashboard input; they do not belong in configs, reports, logs, tickets, or committed files.
