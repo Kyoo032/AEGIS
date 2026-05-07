@@ -8,14 +8,24 @@
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-785%20passed-brightgreen)]()
-[![Coverage](https://img.shields.io/badge/coverage-88.8%25-brightgreen)]()
+[![Tests](https://img.shields.io/badge/tests-859%20passed-brightgreen)](#testing)
+[![Coverage](https://img.shields.io/badge/coverage-88.8%25-brightgreen)](#testing)
 [![Attack Modules](https://img.shields.io/badge/attacks-15-orange)]()
 [![Payloads](https://img.shields.io/badge/payloads-191-red)]()
 
-[Quick Start](#-quick-start) · [Workflow](#how-aegis-works) · [CLI Usage](#cli-usage) · [Attack Surface](#-attack-surface) · [Integrate Your Model](#-integrate-your-own-model) · [Docs](#-documentation)
+[Quick Start](#quick-start) · [Workflow](#how-aegis-works) · [CLI Usage](#cli-usage) · [Attack Surface](#attack-surface) · [Integrate Your Model](#integrate-your-own-model) · [Docs](#documentation)
 
 </div>
+
+---
+
+> **At a Glance**
+>
+> | | |
+> |---|---|
+> | **What** | Red-team framework for LLM agents — fires adversarial payloads, scores results, emits auditable reports |
+> | **Ships with** | 15 attack modules · 5 defenses · 191 payloads · rule-based + LLM-judge dual scorer |
+> | **Start here** | `uv run aegis guide` |
 
 ---
 
@@ -34,15 +44,15 @@ It is designed for the reality of modern agentic systems: tool use, MCP servers,
 ```mermaid
 flowchart LR
     U["You choose a model"] --> E["shell env + config.yaml"]
-    E --> R["Linux/WSL runtime"]
-    R --> O["Ollama or hosted provider"]
-    R --> A["AEGIS scanner"]
+    E --> RW["Linux/WSL runtime"]
+    RW --> O["Ollama or hosted provider"]
+    RW --> A["AEGIS scanner"]
     A --> P["Attack payloads"]
     P --> T["Testbed agent"]
     T --> O
     O --> S["Rule scorer + LLM judge"]
-    S --> R["JSON / HTML reports"]
-    R --> N["Fix, harden, rerun"]
+    S --> RP["JSON / HTML reports"]
+    RP --> N["Fix, harden, rerun"]
     N --> A
 ```
 
@@ -52,17 +62,19 @@ flowchart LR
 
 ## Highlights
 
-- **15 attack modules** covering goal hijack, tool misuse, supply chain, code exec, memory poisoning, MCP injection, cross-lingual prompts, and more.
-- **5 defense modules** for layered hardening — input validation, output filtering, tool boundaries, MCP integrity, permission enforcement.
-- **Dual-scorer evaluation:** deterministic rule-based scoring + LLM-judge confirmation.
-- **Low-VRAM friendly:** the local path can run one Ollama model for both target and judge on consumer hardware.
-- **Pluggable providers:** Ollama, hosted API providers, and offline fixtures.
-- **Structured reports:** JSON + HTML, with optional Streamlit dashboard.
-- **CI-ready:** exit code `2` when vulnerabilities are found, so pipelines can fail loudly.
+| | |
+|---|---|
+| **15 attack modules** | Goal hijack, tool misuse, supply chain, code exec, memory poisoning, MCP injection, cross-lingual prompts, and more |
+| **5 defense modules** | Layered hardening — input validation, output filtering, tool boundaries, MCP integrity, permission enforcement |
+| **Dual-scorer evaluation** | Deterministic rule-based scoring + LLM-judge confirmation |
+| **Low-VRAM friendly** | One Ollama model can serve as both target and judge on consumer hardware |
+| **Pluggable providers** | Ollama, hosted API providers (OpenAI, Anthropic, HF), and offline fixtures |
+| **Structured reports** | JSON + HTML, with optional Streamlit dashboard |
+| **CI-ready** | Exit code `2` when vulnerabilities are found so pipelines can fail loudly |
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
 **For most users, start with Linux or WSL.** This is the primary build and validation path. Docker is kept as a packaging option after the direct runtime is stable.
 
@@ -73,7 +85,7 @@ flowchart LR
 - Optional: Ollama for local model runs
 - Optional: a hosted provider key for OpenAI/OpenAI-compatible, Anthropic, Hugging Face, or a company gateway
 
-### Install And Run On Linux/WSL
+### Install and Run on Linux/WSL
 
 **1. Clone the repo and install dependencies.**
 
@@ -111,11 +123,11 @@ uv run aegis report \
 
 | Result | Meaning |
 |---|---|
-| Exit code `0` | Scan completed and no successful attacks were found. |
-| Exit code `2` | Scan completed and vulnerabilities were found. Review the report. |
-| Exit code `1` | Setup, config, provider, or report rendering failed. |
+| Exit code `0` | Scan completed and no successful attacks were found |
+| Exit code `2` | Scan completed and vulnerabilities were found — review the report |
+| Exit code `1` | Setup, config, provider, or report rendering failed |
 
-**First command to remember:** `uv run aegis guide`
+**First command to remember:** <kbd>uv run aegis guide</kbd>
 
 ### Linux/WSL CLI Commands
 
@@ -142,6 +154,8 @@ uv run streamlit run dashboard/app.py
 
 The Run Scan page accepts a temporary BYOK value for hosted providers. The key is placed in process environment only for the scan and restored or removed afterwards.
 
+---
+
 ## CLI Usage
 
 Use the direct Linux/WSL commands by default. These help commands are the fastest way to discover options without leaving the terminal:
@@ -162,25 +176,38 @@ For a first-time user, start with `uv run aegis guide`. It explains the mental m
 
 | Goal | Command |
 |---|---|
-| **I am new and need the guided path.** | `uv run aegis guide` |
-| **Run the full baseline attack suite.** | `uv run aegis scan` |
-| **Debug one attack category.** | `uv run aegis attack --module <name>` |
-| **Test one guardrail.** | `uv run aegis defend --defense <name>` |
-| **Compare multiple defenses.** | `uv run aegis matrix` |
-| **Convert JSON to HTML.** | `uv run aegis report --input <report.json> --format html` |
+| I am new and need the guided path | `uv run aegis guide` |
+| Run the full baseline attack suite | `uv run aegis scan` |
+| Debug one attack category | `uv run aegis attack --module <name>` |
+| Test one guardrail | `uv run aegis defend --defense <name>` |
+| Compare multiple defenses | `uv run aegis matrix` |
+| Convert JSON to HTML | `uv run aegis report --input <report.json> --format html` |
 
-### Command reference
+### Command Reference
 
 | Command | Purpose | Typical output |
 |---|---|---|
-| `guide` | Show practical workflows, important options, tips, and exit-code guidance. | Terminal guide text |
-| `scan` | Run every configured attack module once with no defense enabled. | `baseline.json` or `baseline.html` |
-| `attack --module <name>` | Run one attack module, useful for debugging a vulnerability class. | `attack-<name>.json` or `.html` |
-| `defend --defense <name>` | Run the full attack set with one defense enabled. | `defense-<name>.json` or `.html` |
-| `matrix` | Run baseline, individual defenses, and layered defense combinations. | One report per scenario plus a matrix summary JSON |
-| `report --input <file>` | Re-render an existing JSON report or matrix summary as JSON or HTML. | Path set by `--output` |
+| `guide` | Show practical workflows, important options, tips, and exit-code guidance | Terminal guide text |
+| `scan` | Run every configured attack module once with no defense enabled | `baseline.json` or `baseline.html` |
+| `attack --module <name>` | Run one attack module, useful for debugging a vulnerability class | `attack-<name>.json` or `.html` |
+| `defend --defense <name>` | Run the full attack set with one defense enabled | `defense-<name>.json` or `.html` |
+| `matrix` | Run baseline, individual defenses, and layered defense combinations | One report per scenario plus a matrix summary JSON |
+| `report --input <file>` | Re-render an existing JSON report or matrix summary as JSON or HTML | Path set by `--output` |
 
-### Common options
+### Exit Codes
+
+| Code | Meaning |
+|---:|---|
+| `0` | The command completed and no successful attacks were found |
+| `1` | A runtime, argument, config, or report-rendering error occurred |
+| `2` | The command completed and at least one vulnerability was found |
+
+Exit code `2` is expected for vulnerable targets. In CI, treat it as a security gate failure; in local research, treat it as a completed scan with findings to inspect.
+
+<details>
+<summary><b>More CLI examples</b> — common options, module discovery, recommended workflows</summary>
+
+#### Common options
 
 ```bash
 # Pick a config file
@@ -201,17 +228,7 @@ uv run aegis report \
 
 `--config` overrides `AEGIS_CONFIG_PATH`. `--output` overrides `AEGIS_REPORTS_DIR`. If neither is set, AEGIS uses the config file's `reporting.output_dir`, falling back to `./reports`.
 
-### Exit codes
-
-| Code | Meaning |
-|---:|---|
-| `0` | The command completed and no successful attacks were found. |
-| `1` | A runtime, argument, config, or report-rendering error occurred. |
-| `2` | The command completed and at least one vulnerability was found. |
-
-Exit code `2` is expected for vulnerable targets. In CI, treat it as a security gate failure; in local research, treat it as a completed scan with findings to inspect.
-
-### Discover modules and defenses
+#### Discover modules and defenses
 
 The CLI validates names against your active config. If you use an invalid name, AEGIS prints the available choices:
 
@@ -227,7 +244,7 @@ uv run aegis attack --module llm01_prompt_inject --output reports/prompt-injecti
 uv run aegis defend --defense tool_boundary --output reports/tool-boundary
 ```
 
-### Recommended workflows
+#### Recommended workflows
 
 For Linux/WSL local-model validation:
 
@@ -262,6 +279,8 @@ uv run aegis report \
   --output reports/local-model/baseline.html
 ```
 
+</details>
+
 ## Hosted Provider Config
 
 Hosted providers are useful for pilots, quick demos, or teams that already run their target model behind an API. Use one generic template and set the API shape, base URL, key environment variable, and model for your provider.
@@ -295,7 +314,7 @@ uv run aegis scan \
 
 Provider-specific examples:
 
-| Provider | Mode | Env var example |
+| Provider | Mode | Env var |
 |---|---|---|
 | OpenAI or OpenAI-compatible | `openai_compat` | `OPENAI_API_KEY` |
 | Anthropic | `anthropic` | `ANTHROPIC_API_KEY` |
@@ -304,7 +323,8 @@ Provider-specific examples:
 
 The template keeps scoring rule-based by default to avoid requiring a separate judge provider. Keep API keys in environment variables, not YAML, reports, logs, issues, or backlog notes.
 
-## Packaging With Docker
+<details>
+<summary><b>Packaging With Docker</b> (deferred — open for instructions)</summary>
 
 Docker is a deferred packaging path after the direct Linux/WSL workflow is stable. The repo ships with a hardened Docker Compose setup for operators who want a reproducible packaged runtime.
 
@@ -393,9 +413,11 @@ docker compose -f docker-compose.yml -f docker-compose.gpu.yml --profile local u
 
 For hosted providers, copy `aegis/config.hosted.yaml`, set your provider fields, and keep API keys in environment variables rather than YAML.
 
+</details>
+
 ---
 
-## 🧩 Execution Details
+## Execution Details
 
 1. **Attack modules** generate adversarial payloads for a specific vulnerability class, such as prompt injection, tool misuse, memory poisoning, or command injection.
 2. **The testbed agent** wraps your target model with configurable MCP servers, RAG, memory, and safety profiles (`default` / `hardened` / `minimal`).
@@ -404,7 +426,7 @@ For hosted providers, copy `aegis/config.hosted.yaml`, set your provider fields,
 5. **Optional defenses** sit between the attacker and agent so you can measure whether a guardrail reduces risk.
 6. **Reports** are written as JSON or HTML for audit, CI, and human review.
 
-### Scoring model
+### Scoring Model
 
 | Scorer | What it checks |
 |---|---|
@@ -415,7 +437,7 @@ Successful = flagged by **both** scorers with confidence above the threshold.
 
 ---
 
-## 🎯 Attack Surface
+## Attack Surface
 
 <details open>
 <summary><b>15 active modules — click for the latest baseline ASR</b></summary>
@@ -444,7 +466,7 @@ Successful = flagged by **both** scorers with confidence above the threshold.
 
 ---
 
-## 🛡️ Defenses
+## Defenses
 
 | Defense | Purpose |
 |---|---|
@@ -460,7 +482,7 @@ The latest defense-matrix analysis lives in [DEFENSE_EVALUATION.md](docs/DEFENSE
 
 ---
 
-## 🔌 Integrate Your Own Model
+## Integrate Your Own Model
 
 AEGIS accepts any model exposed through the supported providers. The primary path is direct Linux/WSL execution with explicit config files and shell environment variables.
 
@@ -541,7 +563,7 @@ For Anthropic, set `mode: "anthropic"` and `api_key_env: "ANTHROPIC_API_KEY"`. F
 
 ### Option C — Docker packaging
 
-Docker packaging remains available after the direct Linux/WSL path is stable. See [Packaging With Docker](#packaging-with-docker).
+Docker packaging remains available after the direct Linux/WSL path is stable. See the [Packaging With Docker](#packaging-with-docker) section in Hosted Provider Config above.
 
 ### Option D — Custom providers
 
@@ -558,13 +580,16 @@ testbed:
   model: "<target-model>:<tag>"        # target under test
 ```
 
-### Why the low-VRAM single-model path exists
+<details>
+<summary><b>Notes on low-VRAM and single-model setups</b></summary>
 
 Some reasoning models can return an empty `response` on Ollama's `/api/generate` while filling only the `thinking` field. AEGIS uses `/api/chat` with `think: false` and can reuse one small model as both target and judge so you can run the full suite on constrained hardware.
 
+</details>
+
 ---
 
-## 🧪 Testing
+## Testing
 
 ```bash
 uv run ruff check .
@@ -580,7 +605,7 @@ AEGIS_TARGET_MODEL=<your-model>:<tag> uv run aegis scan --format json --output r
 
 ---
 
-## 📂 Repository Layout
+## Repository Layout
 
 ```
 aegis/
@@ -600,12 +625,12 @@ dashboard/           # Streamlit dashboard (optional)
 datasets/            # fixtures, KB corpora, payload seeds
 docs/                # methodology, findings, evaluation reports
 reports/             # generated scan artifacts (local)
-tests/               # 785 tests, 88.8% coverage
+tests/               # 859 tests, 88.8% coverage
 ```
 
 ---
 
-## 📚 Documentation
+## Documentation
 
 | Document | Description |
 |---|---|
@@ -621,7 +646,7 @@ tests/               # 785 tests, 88.8% coverage
 
 ---
 
-## 🤝 Contributing
+## Contributing
 
 Issues and pull requests welcome — especially new attack modules and defense strategies. Please:
 
@@ -631,6 +656,6 @@ Issues and pull requests welcome — especially new attack modules and defense s
 
 ---
 
-## 📜 License
+## License
 
 Released under the [MIT License](LICENSE). AEGIS is a research and defensive-testing tool. Only run it against systems you own or have explicit authorization to test.

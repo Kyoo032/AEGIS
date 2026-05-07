@@ -308,7 +308,7 @@ class TestDefaultAgentTimeoutRetry:
             seen_timeout["value"] = timeout
             return ok_response
 
-        with patch("aegis.testbed.agent.urlopen", side_effect=_fake_urlopen):
+        with patch("aegis.testbed.agent_providers.urlopen", side_effect=_fake_urlopen):
             output = agent._call_ollama("prompt")
 
         payload = json.loads(seen_request["body"])
@@ -331,7 +331,7 @@ class TestDefaultAgentTimeoutRetry:
         ok_response.__exit__.return_value = False
 
         with patch(
-            "aegis.testbed.agent.urlopen",
+            "aegis.testbed.agent_providers.urlopen",
             side_effect=[URLError("temporary"), ok_response],
         ) as mocked_urlopen:
             output = agent._call_ollama("prompt")
@@ -346,7 +346,7 @@ class TestDefaultAgentTimeoutRetry:
         bad_response.__enter__.return_value = bad_response
         bad_response.__exit__.return_value = False
 
-        with patch("aegis.testbed.agent.urlopen", return_value=bad_response) as mocked_urlopen:
+        with patch("aegis.testbed.agent_providers.urlopen", return_value=bad_response) as mocked_urlopen:
             with pytest.raises(LLMCallError, match="non-retryable"):
                 agent._call_ollama("prompt")
 
@@ -362,7 +362,7 @@ class TestDefaultAgentTimeoutRetry:
         empty_response.__enter__.return_value = empty_response
         empty_response.__exit__.return_value = False
 
-        monkeypatch.setattr("aegis.testbed.agent.urlopen", lambda *_args, **_kwargs: empty_response)
+        monkeypatch.setattr("aegis.testbed.agent_providers.urlopen", lambda *_args, **_kwargs: empty_response)
 
         response = agent.run(_payload())
 

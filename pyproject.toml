@@ -81,6 +81,11 @@ exclude = [
     "output",
     "reports",
     "tmp",
+    "aegis/testbed/agent_config.py",
+    "aegis/testbed/agent_providers.py",
+    "aegis/testbed/agent_tools.py",
+    "aegis/testbed/agent_defenses.py",
+    "aegis/testbed/agent_output.py",
 ]
 venvPath = "."
 venv = ".venv"
@@ -90,11 +95,29 @@ typeCheckingMode = "basic"
 extraPaths = ["."]
 reportMissingTypeStubs = "none"
 
+[[tool.pyright.executionEnvironments]]
+root = "aegis/models.py"
+typeCheckingMode = "strict"
+
+[[tool.pyright.executionEnvironments]]
+root = "aegis/interfaces"
+typeCheckingMode = "strict"
+
+[[tool.pyright.executionEnvironments]]
+root = "aegis/defenses"
+typeCheckingMode = "strict"
+
+[[tool.pyright.executionEnvironments]]
+root = "aegis/evaluation/rules"
+typeCheckingMode = "strict"
+
 [tool.coverage.run]
 source = ["aegis"]
 omit = [
     "tests/*",
     "aegis/testbed/agent.py",
+    "aegis/testbed/agent_providers.py",
+    "aegis/testbed/agent_tools.py",
     "aegis/testbed/mcp_servers/*",
     "aegis/testbed/rag_pipeline.py",
     "aegis/orchestrator.py",
