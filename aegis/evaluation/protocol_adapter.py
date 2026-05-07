@@ -22,6 +22,8 @@ class ProtocolScorerAdapter(Scorer):
             success=bool(scored.success),
             confidence=confidence,
             scoring_method=scored.scoring_method,
+            score_methods=[scored.scoring_method],
+            consensus_method=scored.scoring_method,
             explanation=scored.explanation,
             indicators=list(scored.indicators),
             defense_bypassed=bool(scored.success) if result.response.defense_active else None,

@@ -30,10 +30,10 @@ from aegis.evaluation.rule_detector import (
     detect_tool_chaining,
     detect_tool_output_injection,
     detect_trap_content_in_output,
+    detect_unverified_peer_instruction,
     precondition_poisoned_retrieval_present,
     precondition_trap_content_in_tool_result,
     precondition_untrusted_retrieval_dominant,
-    detect_unverified_peer_instruction,
 )
 from aegis.models import (
     AgentResponse,

@@ -45,7 +45,8 @@
         "passed",
         "success",
         "score",
-        "score_method",
+        "score_methods",
+        "consensus_method",
         "response_snippet"
       ],
       "properties": {
@@ -56,7 +57,11 @@
         "passed": { "type": "boolean" },
         "success": { "type": "boolean" },
         "score": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
-        "score_method": { "type": "string" },
+        "score_methods": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "consensus_method": { "type": "string" },
         "response_snippet": { "type": "string" },
         "attack_family": { "type": "string" },
         "technique_tag": { "type": ["string", "null"] },

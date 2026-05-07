@@ -83,6 +83,7 @@ class EvaluationPipeline:
                 explanation="Consensus is inconclusive because all scorers saw provider/runtime errors.",
                 indicators=[],
                 preconditions=_merged_preconditions(scored),
+                score_methods=_score_methods(scored),
                 inconclusive=True,
             )
 
@@ -114,6 +115,7 @@ class EvaluationPipeline:
                 ),
                 indicators=_merged_indicators(scored),
                 preconditions=_merged_preconditions(scored),
+                score_methods=_score_methods(scored),
                 inconclusive=False,
             )
 
@@ -128,6 +130,7 @@ class EvaluationPipeline:
                 ),
                 indicators=_merged_indicators(scored),
                 preconditions=_merged_preconditions(scored),
+                score_methods=_score_methods(scored),
                 inconclusive=False,
             )
 
@@ -145,6 +148,7 @@ class EvaluationPipeline:
                 ),
                 indicators=_merged_indicators(scored),
                 preconditions=_merged_preconditions(scored),
+                score_methods=_score_methods(scored),
                 inconclusive=False,
             )
 
@@ -158,6 +162,7 @@ class EvaluationPipeline:
             ),
             indicators=_merged_indicators(scored),
             preconditions=_merged_preconditions(scored),
+            score_methods=_score_methods(scored),
             inconclusive=False,
         )
 
@@ -184,6 +189,15 @@ def _merged_preconditions(scored: list[EvaluationResult]) -> list[str]:
     return merged
 
 
+def _score_methods(scored: list[EvaluationResult]) -> list[ScoringMethod]:
+    methods: list[ScoringMethod] = []
+    for result in scored:
+        method = result.scoring_method
+        if method not in methods:
+            methods.append(method)
+    return methods
+
+
 def _consensus_result(
     base: EvaluationResult,
     *,
@@ -192,6 +206,7 @@ def _consensus_result(
     explanation: str,
     indicators: list[str],
     preconditions: list[str] | None = None,
+    score_methods: list[ScoringMethod] | None = None,
     inconclusive: bool = False,
 ) -> EvaluationResult:
     defense_bypassed = None
@@ -201,6 +216,8 @@ def _consensus_result(
         update={
             "success": success,
             "confidence": max(0.0, min(1.0, confidence)),
+            "score_methods": list(score_methods or [base.scoring_method]),
+            "consensus_method": base.scoring_method,
             "explanation": explanation,
             "indicators": indicators,
             "preconditions": list(preconditions or []),
