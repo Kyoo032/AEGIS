@@ -42,7 +42,7 @@ It is designed for the reality of modern agentic systems: tool use, MCP servers,
 ## How AEGIS Works
 
 ```mermaid
-flowchart LR
+flowchart TD
     U["You choose a model"] --> E["shell env + config.yaml"]
     E --> RW["Linux/WSL runtime"]
     RW --> O["Ollama or hosted provider"]
@@ -77,6 +77,25 @@ flowchart LR
 ## Quick Start
 
 **For most users, start with Linux or WSL.** This is the primary build and validation path. Docker is kept as a packaging option after the direct runtime is stable.
+
+### 5-minute first run (copy-paste)
+
+```bash
+git clone https://github.com/Kyoo032/AEGIS.git && cd AEGIS
+uv sync --extra dev --extra dashboard
+ollama pull qwen3:1.7b            # ~1 GB; canonical local model
+uv run aegis scan \
+  --config aegis/config.local_single_qwen.yaml \
+  --format json --output reports/first-run
+uv run aegis report \
+  --input reports/first-run/baseline.json \
+  --format html --output reports/first-run/baseline.html
+# Open reports/first-run/baseline.html in a browser
+```
+
+Exit code `2` means the scan ran and found vulnerabilities — that is expected on a first run. Exit code `0` means no attacks succeeded.
+
+For company/team rollouts see [docs/COMPANY_QUICKSTART.md](docs/COMPANY_QUICKSTART.md).
 
 ### Prerequisites
 
@@ -342,11 +361,11 @@ The default container posture is intentionally conservative:
 cp .env.example .env
 ```
 
-2. Choose your local model in `.env`, then start Ollama and pull it:
+2. Choose your local model in `.env`, then start Ollama and pull it (any compatible Ollama model works; `qwen3:1.7b` is the canonical example):
 
 ```dotenv
-OLLAMA_MODELS=<your-model>:<tag>
-AEGIS_TARGET_MODEL=<your-model>:<tag>
+OLLAMA_MODELS=qwen3:1.7b
+AEGIS_TARGET_MODEL=qwen3:1.7b
 ```
 
 ```bash
@@ -395,10 +414,10 @@ docker compose run --rm \
 For the common local Ollama workflow, you usually only need `.env`:
 
 ```dotenv
-OLLAMA_MODELS=<target-model>:<tag>
-AEGIS_TARGET_MODEL=<target-model>:<tag>
+OLLAMA_MODELS=qwen3:1.7b
+AEGIS_TARGET_MODEL=qwen3:1.7b
 # Optional: use a stronger or separate judge
-AEGIS_JUDGE_MODEL=<judge-model>:<tag>
+AEGIS_JUDGE_MODEL=qwen3:1.7b
 ```
 
 `AEGIS_TARGET_MODEL` sets the target, fallback, and judge model unless you also set `AEGIS_FALLBACK_MODEL` or `AEGIS_JUDGE_MODEL`.
@@ -559,11 +578,22 @@ export OPENAI_API_KEY=<your-openai-or-compatible-key>
 uv run aegis scan --config aegis/config.hosted.yaml --output reports/hosted-provider
 ```
 
-For Anthropic, set `mode: "anthropic"` and `api_key_env: "ANTHROPIC_API_KEY"`. For Hugging Face, set `mode: "hf_inference"` and `api_key_env: "HF_TOKEN"`. For a company OpenAI-compatible gateway, set `mode: "openai_compat"`, `api_key_env: "ACME_LLM_API_KEY"`, and your gateway `base_url`.
+For Anthropic, set `mode: "anthropic"` and `api_key_env: "ANTHROPIC_API_KEY"`. For Hugging Face, set `mode: "hf_inference"` and `api_key_env: "HF_TOKEN"`.
+
+**Company OpenAI-compatible gateway example:**
+
+```bash
+export AEGIS_PROVIDER_MODE=openai_compat
+export ACME_LLM_API_KEY=<your-gateway-key>
+# In aegis/config.hosted.yaml set:
+#   provider.api_key_env: ACME_LLM_API_KEY
+#   provider.base_url:    https://gateway.acme.internal/v1
+uv run aegis scan --config aegis/config.hosted.yaml --format json --output reports/hosted-run
+```
 
 ### Option C — Docker packaging
 
-Docker packaging remains available after the direct Linux/WSL path is stable. See the [Packaging With Docker](#packaging-with-docker) section in Hosted Provider Config above.
+Docker packaging remains available after the direct Linux/WSL path is stable. See the [Packaging With Docker](#packaging-with-docker) section above, or the full runbook at [docs/PACKAGING_DOCKER.md](docs/PACKAGING_DOCKER.md).
 
 ### Option D — Custom providers
 
