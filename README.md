@@ -639,7 +639,6 @@ tests/               # 859 tests, 88.8% coverage
 | [COMPANY_QUICKSTART.md](docs/COMPANY_QUICKSTART.md) | 10-minute Linux/WSL-first workflow for company AI teams |
 | [MCP_TOOL_SECURITY.md](docs/MCP_TOOL_SECURITY.md) | Practical MCP/tool security guidance and AEGIS module mapping |
 | [DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md) | Short demo flow for launch calls and videos |
-| [LAUNCH_COPY.md](docs/LAUNCH_COPY.md) | Public launch copy, audience, and positioning |
 | [DEFENSE_EVALUATION.md](docs/DEFENSE_EVALUATION.md) | Defense-matrix interpretation and current limits |
 | [PROBE_CATALOG_REVIEW.md](docs/PROBE_CATALOG_REVIEW.md) | Per-module payload catalog review |
 | [CHANGELOG.md](CHANGELOG.md) | Release history and development notes |
