@@ -98,6 +98,10 @@
         "inconclusive": { "type": "boolean" },
         "score": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
         "score_method": { "type": "string" },
+        "preconditions": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
         "response_snippet": { "type": "string" },
         "attack_family": { "type": "string" },
         "technique_tag": { "type": ["string", "null"] },
