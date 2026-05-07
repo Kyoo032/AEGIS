@@ -150,6 +150,9 @@
       <p>
         AEGIS executed {{ report.total_attacks }} probes against the configured target and observed
         {{ report.total_successful }} successful attack outcomes (Overall ASR {{ "{:.1%}".format(report.attack_success_rate) }}).
+        {% if report.inconclusive_count %}
+        {{ report.inconclusive_count }} probe(s) were inconclusive due to provider/runtime errors and excluded from ASR.
+        {% endif %}
         {% if report.defense_comparison and report.defense_comparison.get("delta_attack_success_rate") is not none %}
         Compared with baseline, this scenario changed ASR by {{ "{:+.1%}".format(report.defense_comparison.get("delta_attack_success_rate", 0.0)) }}.
         {% endif %}
@@ -166,7 +169,11 @@
         </div>
         <div class="kpi">
           <div class="label">Blocked</div>
-          <div class="value">{{ report.total_attacks - report.total_successful }}</div>
+          <div class="value">{{ report.total_attacks - report.total_successful - report.inconclusive_count }}</div>
+        </div>
+        <div class="kpi">
+          <div class="label">Inconclusive</div>
+          <div class="value">{{ report.inconclusive_count }}</div>
         </div>
         <div class="kpi">
           <div class="label">Overall ASR</div>

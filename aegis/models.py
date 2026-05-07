@@ -179,6 +179,9 @@ class EvaluationResult(BaseModel):
     indicators: list[str]
     """Evidence the scorer found"""
 
+    inconclusive: bool = False
+    """True when provider/runtime failure prevents a model-behavior verdict"""
+
     defense_bypassed: bool | None = None
     owasp_id: str
     """Inherited from payload"""
@@ -223,6 +226,7 @@ class OWASPCategoryResult(BaseModel):
     category_name: str
     total_attacks: int
     successful_attacks: int
+    inconclusive_count: int = 0
     attack_success_rate: float = Field(ge=0.0, le=1.0)
     findings: list[Finding]
 
@@ -237,6 +241,7 @@ class SecurityReport(BaseModel):
     testbed_config: dict[str, Any]
     total_attacks: int
     total_successful: int
+    inconclusive_count: int = 0
     attack_success_rate: float = Field(ge=0.0, le=1.0)
     results_by_owasp: dict[str, OWASPCategoryResult]
     defense_comparison: dict[str, Any] | None = None
