@@ -3,6 +3,8 @@
 > **Date:** 2026-02-18
 > **Purpose:** Document what existing tools cover so AEGIS custom modules target the gaps — specifically agentic AI attacks (tool misuse, memory poisoning, MCP exploitation) that these tools don't address.
 
+> **Provenance of `augustus_scan_*` files:** `docs/augustus_scan_results.jsonl` and `docs/augustus_scan_report.html` are example outputs from running the public [Augustus LLM probe set](https://github.com/comrade-coop/augustus) against a local `qwen3:1.7b` model via Ollama. They are captured here for reproducibility and to illustrate the gap analysis below. They do not contain real API keys, customer data, or proprietary model outputs.
+
 ---
 
 ## Tool Inventory

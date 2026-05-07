@@ -7,7 +7,6 @@ qwen3.5:0.8b already pulled. Run with:
 """
 from __future__ import annotations
 
-import json
 import os
 import re
 import shutil
