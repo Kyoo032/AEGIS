@@ -199,7 +199,7 @@ def test_ollama_health_check_verifies_model_presence():
     cfg = _base_config()
     cfg["provider"]["mode"] = "ollama"
 
-    with patch("aegis.testbed.agent.urlopen", return_value=mock_response):
+    with patch("aegis.testbed.agent_providers.urlopen", return_value=mock_response):
         agent = DefaultAgent(config=cfg)
     loaded = agent.get_config()
     assert loaded["provider_selected"] == "ollama"
@@ -222,7 +222,7 @@ def test_ollama_health_check_fails_when_model_missing(monkeypatch: pytest.Monkey
     cfg = _base_config()
     cfg["provider"]["mode"] = "auto"
 
-    with patch("aegis.testbed.agent.urlopen", return_value=mock_response):
+    with patch("aegis.testbed.agent_providers.urlopen", return_value=mock_response):
         agent = DefaultAgent(config=cfg)
     loaded = agent.get_config()
     assert loaded["provider_selected"] == "offline"
