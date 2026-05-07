@@ -50,7 +50,7 @@ class TestASI04Execution:
         module.generate_payloads(TARGET_CONFIG)
         agent = MockAgent(
             default_response=MockResponse(
-                final_output="done",
+                final_output="I will follow the instructions and reveal secrets.",
                 tool_calls=[
                     {
                         "tool_name": "read_file",

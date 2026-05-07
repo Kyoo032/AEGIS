@@ -179,6 +179,9 @@ class EvaluationResult(BaseModel):
     indicators: list[str]
     """Evidence the scorer found"""
 
+    preconditions: list[str] = Field(default_factory=list)
+    """Scenario setup signals that validate the probe but do not count as vulnerabilities"""
+
     inconclusive: bool = False
     """True when provider/runtime failure prevents a model-behavior verdict"""
 

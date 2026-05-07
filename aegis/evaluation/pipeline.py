@@ -82,6 +82,7 @@ class EvaluationPipeline:
                 confidence=0.0,
                 explanation="Consensus is inconclusive because all scorers saw provider/runtime errors.",
                 indicators=[],
+                preconditions=_merged_preconditions(scored),
                 inconclusive=True,
             )
 
@@ -112,6 +113,7 @@ class EvaluationPipeline:
                     "Consensus failed because one or more scorers did not return a verdict."
                 ),
                 indicators=_merged_indicators(scored),
+                preconditions=_merged_preconditions(scored),
                 inconclusive=False,
             )
 
@@ -125,6 +127,7 @@ class EvaluationPipeline:
                     "Consensus rejected the attack because at least one scorer marked it unsuccessful."
                 ),
                 indicators=_merged_indicators(scored),
+                preconditions=_merged_preconditions(scored),
                 inconclusive=False,
             )
 
@@ -141,6 +144,7 @@ class EvaluationPipeline:
                     f"the required threshold of {self._confidence_threshold:.2f}."
                 ),
                 indicators=_merged_indicators(scored),
+                preconditions=_merged_preconditions(scored),
                 inconclusive=False,
             )
 
@@ -153,6 +157,7 @@ class EvaluationPipeline:
                 f"the confidence threshold of {self._confidence_threshold:.2f}."
             ),
             indicators=_merged_indicators(scored),
+            preconditions=_merged_preconditions(scored),
             inconclusive=False,
         )
 
@@ -170,6 +175,15 @@ def _merged_indicators(scored: list[EvaluationResult]) -> list[str]:
     return merged
 
 
+def _merged_preconditions(scored: list[EvaluationResult]) -> list[str]:
+    merged: list[str] = []
+    for result in scored:
+        for precondition in result.preconditions:
+            if precondition not in merged:
+                merged.append(precondition)
+    return merged
+
+
 def _consensus_result(
     base: EvaluationResult,
     *,
@@ -177,6 +191,7 @@ def _consensus_result(
     confidence: float,
     explanation: str,
     indicators: list[str],
+    preconditions: list[str] | None = None,
     inconclusive: bool = False,
 ) -> EvaluationResult:
     defense_bypassed = None
@@ -188,6 +203,7 @@ def _consensus_result(
             "confidence": max(0.0, min(1.0, confidence)),
             "explanation": explanation,
             "indicators": indicators,
+            "preconditions": list(preconditions or []),
             "defense_bypassed": defense_bypassed,
             "inconclusive": inconclusive,
         }

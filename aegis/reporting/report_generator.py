@@ -232,6 +232,7 @@ def _probe_result(eval_result: EvaluationResult) -> dict[str, Any]:
         "inconclusive": eval_result.inconclusive,
         "score": eval_result.confidence,
         "score_method": str(eval_result.scoring_method),
+        "preconditions": list(eval_result.preconditions),
         "response_snippet": _snippet(response.final_output),
         "attack_family": payload.attack_module,
         "technique_tag": metadata.get("technique"),

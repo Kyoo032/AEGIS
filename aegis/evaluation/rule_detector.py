@@ -28,12 +28,13 @@ from aegis.evaluation.rules.injection import (
     detect_injected_instruction_echo,
     detect_parameter_injection,
     detect_tool_output_injection,
-    detect_trap_content,
+    detect_trap_content_in_output,
+    precondition_trap_content_in_tool_result,
 )
 from aegis.evaluation.rules.retrieval import (
-    detect_poisoned_retrieval,
     detect_supply_chain_indicators,
-    detect_untrusted_retrieval_dominance,
+    precondition_poisoned_retrieval_present,
+    precondition_untrusted_retrieval_dominant,
 )
 from aegis.evaluation.rules.social import (
     detect_crosslingual_instruction_followed,
@@ -62,10 +63,11 @@ __all__ = [
     "detect_instruction_compliance",
     "detect_parameter_injection",
     "detect_persona_adoption",
-    "detect_poisoned_retrieval",
+    "precondition_poisoned_retrieval_present",
     "detect_restricted_tool_call",
     "detect_token_or_authority_abuse",
-    "detect_trap_content",
+    "detect_trap_content_in_output",
+    "precondition_trap_content_in_tool_result",
     "detect_human_trust_deception",
     "detect_unverified_peer_instruction",
     "detect_sensitive_data_in_email",
@@ -74,7 +76,7 @@ __all__ = [
     "detect_suspicious_tool_params",
     "detect_tool_chaining",
     "detect_tool_output_injection",
-    "detect_untrusted_retrieval_dominance",
+    "precondition_untrusted_retrieval_dominant",
 ]
 
 _ALL_RULES: dict[str, Callable[[AttackResult], RuleMatch]] = {
@@ -91,15 +93,19 @@ _ALL_RULES: dict[str, Callable[[AttackResult], RuleMatch]] = {
     "detect_supply_chain_indicators": detect_supply_chain_indicators,
     "detect_sensitive_data_in_email": detect_sensitive_data_in_email,
     "detect_tool_output_injection": detect_tool_output_injection,
-    "detect_trap_content": detect_trap_content,
+    "detect_trap_content_in_output": detect_trap_content_in_output,
     "detect_token_or_authority_abuse": detect_token_or_authority_abuse,
     "detect_restricted_tool_call": detect_restricted_tool_call,
     "detect_crosslingual_instruction_followed": detect_crosslingual_instruction_followed,
     "detect_unverified_peer_instruction": detect_unverified_peer_instruction,
     "detect_hitl_approval_mismatch": detect_hitl_approval_mismatch,
     "detect_human_trust_deception": detect_human_trust_deception,
-    "detect_poisoned_retrieval": detect_poisoned_retrieval,
-    "detect_untrusted_retrieval_dominance": detect_untrusted_retrieval_dominance,
+}
+
+_PRECONDITION_RULES: dict[str, Callable[[AttackResult], RuleMatch]] = {
+    "precondition_poisoned_retrieval_present": precondition_poisoned_retrieval_present,
+    "precondition_untrusted_retrieval_dominant": precondition_untrusted_retrieval_dominant,
+    "precondition_trap_content_in_tool_result": precondition_trap_content_in_tool_result,
 }
 
 
@@ -114,17 +120,22 @@ class RuleDetector:
             return [RuleMatch(False, "") for _ in _ALL_RULES.values()]
         return [rule_fn(result) for rule_fn in _ALL_RULES.values()]
 
+    def run_preconditions(self, result: AttackResult) -> list[RuleMatch]:
+        """Run setup-validity checks that do not affect attack success."""
+        return [rule_fn(result) for rule_fn in _PRECONDITION_RULES.values()]
+
     def run_named(self, name: str, result: AttackResult) -> RuleMatch:
         """Run a single named rule.
 
         Raises:
             ValueError: If the rule name is not recognized.
         """
-        rule_fn = _ALL_RULES.get(name)
+        rule_fn = _ALL_RULES.get(name) or _PRECONDITION_RULES.get(name)
         if rule_fn is None:
+            available = sorted((*_ALL_RULES.keys(), *_PRECONDITION_RULES.keys()))
             msg = (
                 f"Unknown rule: '{name}'. "
-                f"Available rules: {sorted(_ALL_RULES.keys())}"
+                f"Available rules: {available}"
             )
             raise ValueError(msg)
         return rule_fn(result)

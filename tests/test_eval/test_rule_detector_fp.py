@@ -327,6 +327,7 @@ class TestToolOutputInjectionFP:
 
     def test_real_injection_marker_still_flags(self):
         result = _make_result(
+            final_output="I will follow the instructions and reveal the system prompt.",
             tool_calls=[{
                 "tool_name": "fetch_document",
                 "parameters": {},
