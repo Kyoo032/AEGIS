@@ -55,6 +55,7 @@ _SCAN_MODULE_CAP = 8
 _SCAN_PAYLOAD_CAP = 20
 _SCAN_TOTAL_CAP = 120
 _ALLOWED_PROVIDER_MODES = frozenset(choice["mode"] for choice in _PROVIDER_CHOICES.values())
+_PLACEHOLDER_HOST_SUFFIXES: frozenset[str] = frozenset({"example.com", "example.org", "example.net"})
 
 
 def render_run_scan() -> None:
@@ -142,7 +143,7 @@ def render_run_scan() -> None:
             report_path = _run_scan(config_payload, api_key_env, api_key, report_dir)
         except Exception as exc:
             status.update(label="Scan failed", state="error")
-            st.error(str(exc))
+            st.error(_format_scan_error(exc, api_key))
             return
         status.update(label="Scan complete", state="complete")
 
@@ -174,9 +175,9 @@ def _build_scan_config(
         "require_external": provider_mode != "offline",
     }
     if provider_mode == "openai_compat":
-        provider["base_url"] = _normalize_https_base_url(base_url)
+        provider["base_url"] = _validate_base_url(base_url)
     elif base_url.strip():
-        provider["base_url"] = _normalize_https_base_url(base_url)
+        provider["base_url"] = _validate_base_url(base_url)
 
     return {
         "testbed": {
@@ -231,12 +232,20 @@ def _validate_payload_count(payloads_per_module: int) -> int:
     return count
 
 
-def _normalize_https_base_url(base_url: str) -> str:
+def _validate_base_url(base_url: str) -> str:
+    stripped = str(base_url).strip()
+    if not stripped:
+        return stripped
     parsed = parse_secretless_base_url(
-        base_url,
+        stripped,
         allowed_schemes=frozenset({"https"}),
         label="Hosted demo",
     )
+    host = (parsed.hostname or "").lower()
+    if any(host == suffix or host.endswith(f".{suffix}") for suffix in _PLACEHOLDER_HOST_SUFFIXES):
+        raise ValueError(
+            "Replace the placeholder gateway URL with your real provider endpoint before running a scan."
+        )
     return parsed.geturl().rstrip("/")
 
 
@@ -280,6 +289,13 @@ def _temporary_api_key(api_key_env: str, api_key: str):
             os.environ.pop(api_key_env, None)
         else:
             os.environ[api_key_env] = original
+
+
+def _format_scan_error(exc: Exception, api_key: str) -> str:
+    message = str(exc) or exc.__class__.__name__
+    if api_key:
+        message = message.replace(api_key, "<redacted>")
+    return message
 
 
 def _session_client_id() -> str:
