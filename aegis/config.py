@@ -167,6 +167,8 @@ _DEFAULTS: dict[str, Any] = {
         "judge_num_predict": 128,
         "judge_keep_alive": "15m",
         "judge_hard_fail": True,
+        "judge_provider_mode": "ollama",
+        "judge_provider": {},
         "confidence_threshold": 0.7,
     },
     "defenses": {

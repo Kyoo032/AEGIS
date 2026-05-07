@@ -113,7 +113,8 @@ class TestLoadConfig:
 
         assert config["testbed"]["provider"]["mode"] == "openai_compat"
         assert config["testbed"]["provider"]["api_key_env"] == "OPENAI_API_KEY"
-        assert config["evaluation"]["scorers"] == ["rule_based"]
+        assert config["evaluation"]["scorers"] == ["rule_based", "llm_judge"]
+        assert config["evaluation"]["judge_provider_mode"] == "target_provider"
         assert config["attacks"]["payloads_per_module"] <= 5
 
     def test_target_model_env_overrides_hosted_provider_model(self, monkeypatch):

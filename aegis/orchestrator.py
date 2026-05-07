@@ -404,17 +404,24 @@ class AEGISOrchestrator:
         from aegis.evaluation.llm_judge import LLMJudgeScorer
 
         eval_cfg = self.config["evaluation"]
-        judge_model = str(eval_cfg.get("judge_model", "qwen3:1.7b"))
+        provider_cfg = dict(self.config["testbed"].get("provider", {}))
+        provider_mode = str(provider_cfg.get("mode", "ollama"))
+        judge_provider_mode = str(eval_cfg.get("judge_provider_mode") or "ollama")
+        if judge_provider_mode == "target_provider":
+            judge_provider_mode = provider_mode
+
+        judge_model = str(eval_cfg.get("judge_model") or "qwen3:1.7b")
+        if judge_provider_mode != "ollama" and judge_model == "qwen3:1.7b":
+            judge_model = str(provider_cfg.get("model") or self.config["testbed"].get("model", judge_model))
         judge_timeout_seconds = float(eval_cfg.get("judge_timeout_seconds", 30))
         judge_max_retries = int(eval_cfg.get("judge_max_retries", 1))
         judge_num_predict = int(eval_cfg.get("judge_num_predict", 64))
         judge_keep_alive = str(eval_cfg.get("judge_keep_alive", "15m"))
         judge_hard_fail = bool(eval_cfg.get("judge_hard_fail", True))
-        base_url = str(
-            self.config["testbed"]["provider"].get(
-                "ollama_base_url", "http://localhost:11434"
-            )
-        )
+        judge_provider_config = dict(provider_cfg)
+        judge_provider_config.update(dict(eval_cfg.get("judge_provider", {})))
+        judge_provider_config["model"] = judge_model
+        base_url = str(provider_cfg.get("ollama_base_url", "http://localhost:11434"))
         return LLMJudgeScorer(
             judge_model=judge_model,
             base_url=base_url,
@@ -423,6 +430,8 @@ class AEGISOrchestrator:
             num_predict=judge_num_predict,
             keep_alive=judge_keep_alive,
             hard_fail=judge_hard_fail,
+            provider_mode=judge_provider_mode,
+            provider_config=judge_provider_config,
         )
 
     def _run_scenario(self, name: str, runner: Callable[[], SecurityReport]) -> SecurityReport:

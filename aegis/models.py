@@ -173,6 +173,12 @@ class EvaluationResult(BaseModel):
     scoring_method: ScoringMethod
     """'rule_based' | 'llm_judge' | 'semantic'"""
 
+    score_methods: list[ScoringMethod] = Field(default_factory=list)
+    """Every scorer that contributed to the resolved result"""
+
+    consensus_method: ScoringMethod | None = None
+    """Representative scorer used for consensus metadata"""
+
     explanation: str
     """Why the scorer decided this way"""
 

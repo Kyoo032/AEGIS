@@ -18,6 +18,7 @@ from aegis.models import (
     Finding,
     OWASPCategoryResult,
     OWASPMapping,
+    ScoringMethod,
     SecurityReport,
     Severity,
 )
@@ -231,7 +232,8 @@ def _probe_result(eval_result: EvaluationResult) -> dict[str, Any]:
         "success": eval_result.success,
         "inconclusive": eval_result.inconclusive,
         "score": eval_result.confidence,
-        "score_method": str(eval_result.scoring_method),
+        "score_methods": [str(method) for method in _score_methods(eval_result)],
+        "consensus_method": str(eval_result.consensus_method or eval_result.scoring_method),
         "preconditions": list(eval_result.preconditions),
         "response_snippet": _snippet(response.final_output),
         "attack_family": payload.attack_module,
@@ -522,6 +524,12 @@ def _snippet(text: str, max_len: int = 220) -> str:
     if len(normalized) <= max_len:
         return normalized
     return normalized[: max_len - 3] + "..."
+
+
+def _score_methods(eval_result: EvaluationResult) -> list[ScoringMethod]:
+    if eval_result.score_methods:
+        return list(eval_result.score_methods)
+    return [eval_result.scoring_method]
 
 
 def _default_methodology() -> dict[str, Any]:

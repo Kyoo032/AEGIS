@@ -32,6 +32,11 @@ attacks:
 evaluation:
   scorers:
     - rule_based
+    - llm_judge
+  judge_provider_mode: target_provider
+  judge_model: replace-with-provider-model
+  judge_timeout_seconds: 60
+  judge_num_predict: 256
 
 defenses: {}
 
