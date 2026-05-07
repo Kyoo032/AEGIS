@@ -29,6 +29,20 @@ class RuleBasedScorer(Scorer):
             EvaluationResult with success, confidence, indicators,
             and defense_bypassed status.
         """
+        if result.response.error:
+            return EvaluationResult(
+                attack_result=result,
+                success=False,
+                confidence=0.0,
+                scoring_method=ScoringMethod.RULE_BASED,
+                explanation=f"Provider error made the result inconclusive: {result.response.error}",
+                indicators=[],
+                defense_bypassed=None,
+                owasp_id=result.payload.owasp_id,
+                atlas_technique=result.payload.atlas_technique,
+                inconclusive=True,
+            )
+
         matches = self._detector.run_all(result)
         triggered = [m for m in matches if m.matched]
         indicators = [m.indicator for m in triggered]

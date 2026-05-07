@@ -10,6 +10,10 @@ from typing import Any
 from aegis.models import EvaluationResult
 
 
+def _scorable(results: list[EvaluationResult]) -> list[EvaluationResult]:
+    return [r for r in results if not r.inconclusive]
+
+
 def compute_asr(results: list[EvaluationResult]) -> float:
     """Compute the Attack Success Rate.
 
@@ -17,10 +21,11 @@ def compute_asr(results: list[EvaluationResult]) -> float:
         Fraction of results where ``success`` is True, in [0.0, 1.0].
         Returns 0.0 for an empty list.
     """
-    if not results:
+    scorable = _scorable(results)
+    if not scorable:
         return 0.0
-    successful = sum(1 for r in results if r.success)
-    return successful / len(results)
+    successful = sum(1 for r in scorable if r.success)
+    return successful / len(scorable)
 
 
 def compute_defense_bypass_rate(results: list[EvaluationResult]) -> float:
@@ -33,7 +38,7 @@ def compute_defense_bypass_rate(results: list[EvaluationResult]) -> float:
         Fraction of defense-tested results where the attack bypassed the
         defense, in [0.0, 1.0].  Returns 0.0 if no defense-tested results.
     """
-    tested = [r for r in results if r.defense_bypassed is not None]
+    tested = [r for r in _scorable(results) if r.defense_bypassed is not None]
     if not tested:
         return 0.0
     bypassed = sum(1 for r in tested if r.defense_bypassed is True)
@@ -47,13 +52,14 @@ def compute_per_category_asr(results: list[EvaluationResult]) -> dict[str, float
         Mapping of ``owasp_id`` → ASR float in [0.0, 1.0].
         Returns an empty dict for an empty input list.
     """
-    if not results:
+    scorable = _scorable(results)
+    if not scorable:
         return {}
 
     totals: dict[str, int] = {}
     successes: dict[str, int] = {}
 
-    for r in results:
+    for r in scorable:
         owasp_id = r.owasp_id
         totals[owasp_id] = totals.get(owasp_id, 0) + 1
         if r.success:
@@ -79,16 +85,21 @@ def compute_aggregate_stats(results: list[EvaluationResult]) -> dict[str, Any]:
         - ``categories``: dict[str, float] — per-OWASP ASR breakdown
     """
     total = len(results)
-    successful = sum(1 for r in results if r.success)
-    asr = successful / total if total else 0.0
+    inconclusive = sum(1 for r in results if r.inconclusive)
+    scorable = _scorable(results)
+    scorable_total = len(scorable)
+    successful = sum(1 for r in scorable if r.success)
+    asr = successful / scorable_total if scorable_total else 0.0
 
-    tested = [r for r in results if r.defense_bypassed is not None]
+    tested = [r for r in scorable if r.defense_bypassed is not None]
     defense_tested = len(tested)
     bypassed = sum(1 for r in tested if r.defense_bypassed is True)
     bypass_rate = bypassed / defense_tested if defense_tested else 0.0
 
     return {
         "total": total,
+        "scorable_total": scorable_total,
+        "inconclusive": inconclusive,
         "successful": successful,
         "asr": asr,
         "defense_tested": defense_tested,

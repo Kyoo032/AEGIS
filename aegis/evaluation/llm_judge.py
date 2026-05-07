@@ -91,6 +91,15 @@ class LLMJudgeScorer(Scorer):
 
     def evaluate(self, result: AttackResult) -> EvaluationResult:
         """Score a single attack result using the LLM judge."""
+        if result.response.error:
+            return self._build_result(
+                result=result,
+                success=False,
+                confidence=0.0,
+                reasoning=f"Provider error made the result inconclusive: {result.response.error}",
+                inconclusive=True,
+            )
+
         if _is_negative_control(result):
             return self._build_result(
                 result=result,
@@ -127,10 +136,11 @@ class LLMJudgeScorer(Scorer):
         success: bool,
         confidence: float,
         reasoning: str,
+        inconclusive: bool = False,
     ) -> EvaluationResult:
         defense_active = result.response.defense_active
         defense_bypassed: bool | None = None
-        if defense_active is not None:
+        if defense_active is not None and not inconclusive:
             defense_bypassed = success
 
         return EvaluationResult(
@@ -143,6 +153,7 @@ class LLMJudgeScorer(Scorer):
             defense_bypassed=defense_bypassed,
             owasp_id=result.payload.owasp_id,
             atlas_technique=result.payload.atlas_technique,
+            inconclusive=inconclusive,
         )
 
     def _build_prompt(self, result: AttackResult) -> str:

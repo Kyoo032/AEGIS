@@ -95,8 +95,10 @@ class ReportGenerator:
         results_by_owasp: dict[str, OWASPCategoryResult] = {}
         for owasp_id, items in grouped.items():
             total = len(items)
-            successful = sum(1 for item in items if item.success)
-            asr = successful / total if total else 0.0
+            inconclusive = sum(1 for item in items if item.inconclusive)
+            scorable = [item for item in items if not item.inconclusive]
+            successful = sum(1 for item in scorable if item.success)
+            asr = successful / len(scorable) if scorable else 0.0
             category_name = (
                 get_owasp_info(owasp_id).get("name")
                 or (items[0].attack_result.payload.category if items else owasp_id)
@@ -107,13 +109,16 @@ class ReportGenerator:
                 category_name=category_name,
                 total_attacks=total,
                 successful_attacks=successful,
+                inconclusive_count=inconclusive,
                 attack_success_rate=asr,
                 findings=category_findings,
             )
 
         total_attacks = len(results)
-        total_successful = sum(1 for item in results if item.success)
-        asr = (total_successful / total_attacks) if total_attacks else 0.0
+        inconclusive_count = sum(1 for item in results if item.inconclusive)
+        scorable_results = [item for item in results if not item.inconclusive]
+        total_successful = sum(1 for item in scorable_results if item.success)
+        asr = (total_successful / len(scorable_results)) if scorable_results else 0.0
 
         if not recommendations:
             recommendations.add("No successful attacks detected; maintain current controls.")
@@ -149,6 +154,7 @@ class ReportGenerator:
             testbed_config=testbed_config or {},
             total_attacks=total_attacks,
             total_successful=total_successful,
+            inconclusive_count=inconclusive_count,
             attack_success_rate=asr,
             results_by_owasp=results_by_owasp,
             defense_comparison=defense_comparison,
@@ -221,8 +227,9 @@ def _probe_result(eval_result: EvaluationResult) -> dict[str, Any]:
         "module": payload.attack_module,
         "owasp_id": payload.owasp_id,
         "owasp_category": get_owasp_info(payload.owasp_id)["name"],
-        "passed": not eval_result.success,
+        "passed": (not eval_result.success) and not eval_result.inconclusive,
         "success": eval_result.success,
+        "inconclusive": eval_result.inconclusive,
         "score": eval_result.confidence,
         "score_method": str(eval_result.scoring_method),
         "response_snippet": _snippet(response.final_output),
@@ -526,7 +533,8 @@ def _default_methodology() -> dict[str, Any]:
         ],
         "scoring": (
             "Rule-based scoring by default, with optional module-aware LLM judge "
-            "prompts loaded from per-module rubrics."
+            "prompts loaded from per-module rubrics. Provider/runtime errors are "
+            "reported as inconclusive and excluded from ASR denominators."
         ),
         "pass_fail": "Attack success indicates failed defense posture for that probe.",
     }
