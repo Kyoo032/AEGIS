@@ -25,7 +25,7 @@ class TestRunScanHelpers:
         config = _build_scan_config(
             provider_mode="openai_compat",
             api_key_env="PROVIDER_API_KEY",
-            base_url="https://api.example.com/v1/",
+            base_url="https://api.mymodel.corp/v1/",
             model="llama-test",
             modules=["llm01_prompt_inject"],
             payloads_per_module=3,
@@ -35,7 +35,7 @@ class TestRunScanHelpers:
         provider = config["testbed"]["provider"]
         assert provider["mode"] == "openai_compat"
         assert provider["api_key_env"] == "PROVIDER_API_KEY"
-        assert provider["base_url"] == "https://api.example.com/v1"
+        assert provider["base_url"] == "https://api.mymodel.corp/v1"
         assert provider["model"] == "llama-test"
         assert config["attacks"]["payloads_per_module"] == 3
         assert config["evaluation"]["scorers"] == ["rule_based"]
@@ -163,6 +163,50 @@ class TestRunScanHelpers:
 
         check_rate_limit.assert_not_called()
         fake_st.error.assert_called_once()
+
+
+    def test_build_scan_config_rejects_placeholder_example_url(self, tmp_path) -> None:
+        from dashboard.pages.run_scan import _build_scan_config
+
+        with pytest.raises(ValueError, match="placeholder"):
+            _build_scan_config(
+                provider_mode="openai_compat",
+                api_key_env="ACME_LLM_API_KEY",
+                base_url="https://llm-gateway.example.com/v1",
+                model="acme-gpt",
+                modules=["llm01_prompt_inject"],
+                payloads_per_module=3,
+                output_dir=tmp_path,
+            )
+
+    def test_build_scan_config_accepts_real_company_gateway_url(self, tmp_path) -> None:
+        from dashboard.pages.run_scan import _build_scan_config
+
+        config = _build_scan_config(
+            provider_mode="openai_compat",
+            api_key_env="ACME_LLM_API_KEY",
+            base_url="https://gateway.acme.internal/v1",
+            model="acme-gpt",
+            modules=["llm01_prompt_inject"],
+            payloads_per_module=3,
+            output_dir=tmp_path,
+        )
+        assert config["testbed"]["provider"]["base_url"] == "https://gateway.acme.internal/v1"
+
+    def test_format_scan_error_redacts_api_key_when_embedded(self) -> None:
+        from dashboard.pages.run_scan import _format_scan_error
+
+        result = _format_scan_error(
+            RuntimeError("auth failed for sk-test-1234"), "sk-test-1234"
+        )
+        assert "<redacted>" in result
+        assert "sk-test-1234" not in result
+
+    def test_format_scan_error_handles_empty_message(self) -> None:
+        from dashboard.pages.run_scan import _format_scan_error
+
+        result = _format_scan_error(Exception(""), "some-key")
+        assert result
 
 
 class TestRateLimit:
