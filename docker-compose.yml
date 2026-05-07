@@ -26,6 +26,9 @@ services:
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
       HF_TOKEN: ${HF_TOKEN:-}
       PROVIDER_API_KEY: ${PROVIDER_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ACME_LLM_API_KEY: ${ACME_LLM_API_KEY:-}
     volumes:
       - ./reports:/app/reports
     depends_on:
@@ -60,8 +63,10 @@ services:
     profiles:
       - dashboard
 
+  # ollama/ollama:latest pinned 2026-05-07; bump by re-running:
+  #   docker buildx imagetools inspect ollama/ollama:latest
   ollama:
-    image: ollama/ollama:latest
+    image: ollama/ollama@sha256:6077dbbd6508dce8973f8b91c30d8026b1279ab0483e15f0dfad469dba676c2f
     init: true
     restart: unless-stopped
     tty: true
@@ -76,20 +81,15 @@ services:
       - local
 
   ollama-init:
-    image: ollama/ollama:latest
+    image: ollama/ollama@sha256:6077dbbd6508dce8973f8b91c30d8026b1279ab0483e15f0dfad469dba676c2f
     init: true
     restart: "no"
-    entrypoint:
-      - /bin/sh
-      - -lc
-      - |
-        set -eu
-        for model in ${OLLAMA_MODELS:-qwen3.5:0.8b}; do
-          ollama pull "$$model"
-        done
+    entrypoint: ["/bin/sh", "/scripts/ollama_init.sh"]
     environment:
       OLLAMA_HOST: http://ollama:11434
       OLLAMA_MODELS: ${OLLAMA_MODELS:-qwen3.5:0.8b}
+    volumes:
+      - ./scripts/ollama_init.sh:/scripts/ollama_init.sh:ro
     depends_on:
       ollama:
         condition: service_healthy

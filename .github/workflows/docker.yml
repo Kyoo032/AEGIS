@@ -1,0 +1,71 @@
+name: Docker
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - Dockerfile
+      - docker-compose*.yml
+      - scripts/ollama_init.sh
+      - pyproject.toml
+      - uv.lock
+      - aegis/**
+      - dashboard/**
+      - .github/workflows/docker.yml
+  pull_request:
+    paths:
+      - Dockerfile
+      - docker-compose*.yml
+      - scripts/ollama_init.sh
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate compose config
+        run: docker compose config -q
+
+      - name: Build runtime image
+        run: docker compose build aegis
+
+      - name: Build dashboard image
+        run: docker compose --profile dashboard build dashboard
+
+      - name: Start ollama service
+        run: docker compose --profile local up -d ollama
+
+      - name: Wait for ollama healthcheck
+        run: |
+          for i in $(seq 1 30); do
+            status=$(docker inspect -f '{{.State.Health.Status}}' "$(docker compose ps -q ollama)" 2>/dev/null || echo starting)
+            [ "$status" = "healthy" ] && echo "ollama healthy" && break
+            echo "[$i/30] waiting for ollama ($status)..."
+            sleep 5
+          done
+          [ "$status" = "healthy" ] || (echo "ollama never became healthy" && exit 1)
+
+      - name: Pull qwen3.5:0.8b via ollama-init
+        run: docker compose --profile local run --rm ollama-init
+
+      - name: Confirm model present
+        run: docker compose --profile local exec -T ollama ollama list | grep -q qwen
+
+      - name: Run ollama scan smoke
+        run: |
+          mkdir -p reports
+          docker compose run --rm \
+            -e AEGIS_PROVIDER_MODE=ollama \
+            aegis scan --format json --output /app/reports
+
+      - name: Secret leak grep
+        run: |
+          ! grep -RInE \
+            'sk-[A-Za-z0-9]{20,}|sk-ant-api[A-Za-z0-9-]{20,}|hf_[A-Za-z0-9]{20,}' \
+            reports/ \
+            || (echo "ERROR: secret pattern found in Docker reports" && exit 1)
+
+      - name: Tear down
+        if: always()
+        run: docker compose --profile local down -v

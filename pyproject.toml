@@ -58,7 +58,10 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
-addopts = "--tb=short -q -p no:deepeval --ignore=tests/test_orchestrator.py"
+addopts = "--tb=short -q -p no:deepeval --ignore=tests/test_orchestrator.py --ignore=tests/test_docker_smoke.py"
+markers = [
+    "docker: marks tests that require a running Docker daemon with ollama (deselect with '-m not docker')",
+]
 
 [tool.ruff]
 line-length = 100
