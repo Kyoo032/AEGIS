@@ -16,7 +16,8 @@ class PromptInjectionModule(BaseAttackModule):
     atlas_technique = "AML.T0051"
     description = (
         "Tests LLM resistance to direct and indirect prompt injection including "
-        "instruction override, jailbreaks, encoding bypass, and delimiter escape."
+        "instruction override, jailbreaks, encoding bypass, delimiter escape, "
+        "and indirect injection via retrieved content (emails, web pages, documents)."
     )
     category = "Prompt Injection"
     default_severity = "high"
