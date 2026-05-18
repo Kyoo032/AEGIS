@@ -12,7 +12,8 @@ class CmdInjectionModule(BaseAttackModule):
     atlas_technique = "AML.T0040"
     description = (
         "Tests command injection against MCP-integrated tools via shell metacharacters, "
-        "path traversal, and SQL-style abuse."
+        "path traversal, SQL-style abuse, and MCP server spoofing through tool-name "
+        "collision, manifest manipulation, DNS redirect, and capability upgrade injection."
     )
     category = "Command Injection via MCP"
     default_severity = "critical"
