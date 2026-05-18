@@ -7,6 +7,10 @@ from aegis.lazy_loading import LazyClassRegistry, load_symbol
 
 _ATTACK_EXPORTS: dict[str, tuple[str, str]] = {
     "BaseAttackModule": ("aegis.attacks.base", "BaseAttackModule"),
+    "CascadingFailureModule": (
+        "aegis.attacks.asi08_cascading_failure",
+        "CascadingFailureModule",
+    ),
     "CodeExecModule": ("aegis.attacks.asi05_code_exec", "CodeExecModule"),
     "CmdInjectionModule": ("aegis.attacks.mcp06_cmd_injection", "CmdInjectionModule"),
     "CrossLingualPromptInjectionModule": (
@@ -28,6 +32,7 @@ _ATTACK_EXPORTS: dict[str, tuple[str, str]] = {
     "InterAgentTrustModule": ("aegis.attacks.asi07_inter_agent", "InterAgentTrustModule"),
     "MemoryPoisonModule": ("aegis.attacks.asi06_memory_poison", "MemoryPoisonModule"),
     "PromptInjectionModule": ("aegis.attacks.llm01_prompt_inject", "PromptInjectionModule"),
+    "RogueAgentModule": ("aegis.attacks.asi10_rogue_agent", "RogueAgentModule"),
     "SemanticManipulationModule": (
         "aegis.attacks.asi_semantic_manip",
         "SemanticManipulationModule",
@@ -47,10 +52,15 @@ _ATTACK_MODULE_PATHS: dict[str, tuple[str, str]] = {
     "asi05_code_exec": ("aegis.attacks.asi05_code_exec", "CodeExecModule"),
     "asi06_memory_poison": ("aegis.attacks.asi06_memory_poison", "MemoryPoisonModule"),
     "asi07_inter_agent": ("aegis.attacks.asi07_inter_agent", "InterAgentTrustModule"),
+    "asi08_cascading_failure": (
+        "aegis.attacks.asi08_cascading_failure",
+        "CascadingFailureModule",
+    ),
     "asi09_human_trust": (
         "aegis.attacks.asi09_human_trust",
         "HumanTrustDeceptionModule",
     ),
+    "asi10_rogue_agent": ("aegis.attacks.asi10_rogue_agent", "RogueAgentModule"),
     "asi_dynamic_cloak": ("aegis.attacks.asi_dynamic_cloak", "DynamicCloakModule"),
     "asi_hitl": ("aegis.attacks.asi_hitl", "HITLApprovalModule"),
     "asi_semantic_manip": (
