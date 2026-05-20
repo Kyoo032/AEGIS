@@ -52,6 +52,25 @@ OWASP_DESCRIPTIONS: dict[str, dict[str, str]] = {
             "or RAG store, influencing future responses and tool calls."
         ),
     },
+    "ASI08": {
+        "name": "Cascading Failures",
+        "description": (
+            "An initial malfunction in one agent or component triggers a chain of "
+            "subsequent failures across interconnected workflows, amplifying cost, "
+            "propagating corrupt state, and exhausting shared resources when "
+            "circuit breakers and graceful degradation are missing."
+        ),
+    },
+    "ASI10": {
+        "name": "Rogue Agents",
+        "description": (
+            "Unauthorized, unmonitored, or out-of-scope agent behavior: agents "
+            "registered without provenance, persisting after revocation, expanding "
+            "their goal autonomously, spawning ungoverned children, acting outside "
+            "their declared capability manifest, or beaconing to unsanctioned "
+            "endpoints."
+        ),
+    },
     "MCP06": {
         "name": "Command Injection via MCP",
         "description": (

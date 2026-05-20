@@ -23,6 +23,7 @@ from aegis.evaluation.rules.exfiltration import (
     detect_sensitive_data_in_email,
     detect_sensitive_file_access,
 )
+from aegis.evaluation.rules.governance import detect_rogue_agent_behavior
 from aegis.evaluation.rules.injection import (
     detect_command_injection,
     detect_injected_instruction_echo,
@@ -31,6 +32,7 @@ from aegis.evaluation.rules.injection import (
     detect_trap_content_in_output,
     precondition_trap_content_in_tool_result,
 )
+from aegis.evaluation.rules.resilience import detect_cascading_failure_propagation
 from aegis.evaluation.rules.retrieval import (
     detect_supply_chain_indicators,
     precondition_poisoned_retrieval_present,
@@ -54,6 +56,7 @@ from aegis.models import AttackResult
 __all__ = [
     "RuleDetector",
     "RuleMatch",
+    "detect_cascading_failure_propagation",
     "detect_command_injection",
     "detect_crosslingual_instruction_followed",
     "detect_data_exfiltration_email",
@@ -65,6 +68,7 @@ __all__ = [
     "detect_persona_adoption",
     "precondition_poisoned_retrieval_present",
     "detect_restricted_tool_call",
+    "detect_rogue_agent_behavior",
     "detect_token_or_authority_abuse",
     "detect_trap_content_in_output",
     "precondition_trap_content_in_tool_result",
@@ -100,6 +104,8 @@ _ALL_RULES: dict[str, Callable[[AttackResult], RuleMatch]] = {
     "detect_unverified_peer_instruction": detect_unverified_peer_instruction,
     "detect_hitl_approval_mismatch": detect_hitl_approval_mismatch,
     "detect_human_trust_deception": detect_human_trust_deception,
+    "detect_cascading_failure_propagation": detect_cascading_failure_propagation,
+    "detect_rogue_agent_behavior": detect_rogue_agent_behavior,
 }
 
 _PRECONDITION_RULES: dict[str, Callable[[AttackResult], RuleMatch]] = {
