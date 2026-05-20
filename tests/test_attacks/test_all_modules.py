@@ -13,7 +13,9 @@ from aegis.attacks.asi04_supply_chain import SupplyChainModule
 from aegis.attacks.asi05_code_exec import CodeExecModule
 from aegis.attacks.asi06_memory_poison import MemoryPoisonModule
 from aegis.attacks.asi07_inter_agent import InterAgentTrustModule
+from aegis.attacks.asi08_cascading_failure import CascadingFailureModule
 from aegis.attacks.asi09_human_trust import HumanTrustDeceptionModule
+from aegis.attacks.asi10_rogue_agent import RogueAgentModule
 from aegis.attacks.asi_dynamic_cloak import DynamicCloakModule
 from aegis.attacks.asi_hitl import HITLApprovalModule
 from aegis.attacks.asi_semantic_manip import SemanticManipulationModule
@@ -49,7 +51,9 @@ ALL_MODULE_CLASSES = [
     CodeExecModule,
     MemoryPoisonModule,
     InterAgentTrustModule,
+    CascadingFailureModule,
     HumanTrustDeceptionModule,
+    RogueAgentModule,
     DynamicCloakModule,
     HITLApprovalModule,
     SemanticManipulationModule,
@@ -67,7 +71,9 @@ EXPECTED_MODULES = {
     "asi05_code_exec": ("ASI05", "AML.T0051"),
     "asi06_memory_poison": ("ASI06", "AML.T0020"),
     "asi07_inter_agent": ("ASI07", None),
+    "asi08_cascading_failure": ("ASI08", None),
     "asi09_human_trust": ("ASI09", None),
+    "asi10_rogue_agent": ("ASI10", None),
     "asi_dynamic_cloak": ("ASI-DYNAMIC-CLOAK", None),
     "asi_hitl": ("ASI-HITL", None),
     "asi_semantic_manip": ("ASI-SEMANTIC-MANIP", None),

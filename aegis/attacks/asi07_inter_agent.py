@@ -21,7 +21,8 @@ class InterAgentTrustModule(BaseAttackModule):
     description = (
         "Tests inter-agent trust boundary failures including A2A session smuggling, "
         "spoofed peer identity, forged metadata, hidden peer instructions, "
-        "cross-session replay, and delegated-capability confusion."
+        "cross-session replay, delegated-capability confusion, agent impersonation "
+        "with privilege escalation, and prompt relay attacks through trusted intermediaries."
     )
     category = "Inter-Agent Trust Boundary"
     default_severity = "high"
