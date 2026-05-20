@@ -1042,5 +1042,5 @@ class TestRuleDetector:
         result = _make_result()
         matches = detector.run_all(result)
         preconditions = detector.run_preconditions(result)
-        assert len(matches) == 20
+        assert len(matches) == 22
         assert len(preconditions) == 3
