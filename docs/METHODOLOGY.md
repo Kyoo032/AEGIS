@@ -9,7 +9,7 @@
 
 ## Current corpus
 
-The current repo validates 15 active attack modules:
+The repo ships 17 active attack modules (238 payloads with the default tool profile). The 15 modules listed first were validated in the April 21 baseline; `asi08_cascading_failure` and `asi10_rogue_agent` were added afterwards and have not been baselined yet.
 
 - `asi01_goal_hijack`
 - `asi02_tool_misuse`
@@ -26,8 +26,10 @@ The current repo validates 15 active attack modules:
 - `llm01_prompt_inject`
 - `llm02_data_disclosure`
 - `mcp06_cmd_injection`
+- `asi08_cascading_failure` (not yet baselined)
+- `asi10_rogue_agent` (not yet baselined)
 
-The fresh April 21, 2026 local baseline covered `191` payloads across that full set.
+The fresh April 21, 2026 local baseline covered `191` payloads across the first 15 modules. Since then `asi07_inter_agent`, `llm01_prompt_inject`, and `mcp06_cmd_injection` gained payloads, and scans gained a per-module cap (`attacks.payloads_per_module`, 10 in the bundled configs). A default scan today runs at most 170 payloads with `config.yaml` and 150 with `config.local_single_qwen.yaml`; set a larger cap to run the whole corpus.
 
 ## Execution model
 

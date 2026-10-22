@@ -19,6 +19,10 @@ They are not the same run and should not be conflated.
 
 Key implication: the expanded corpus remains highly exploitable in a realistic one-model local setup. The fresh baseline does not invalidate the earlier matrix, but it does confirm that the newer attack families are not paper-only additions.
 
+## What these numbers do not cover
+
+Both lanes predate `asi08_cascading_failure` and `asi10_rogue_agent`, so no defense has been evaluated against them. Both lanes also ran before the per-module payload cap was added on April 29 and used a very small model, so treat the deltas below as directional.
+
 ## Phase 5 matrix source of truth
 
 The current Phase 5 matrix artifact is:
