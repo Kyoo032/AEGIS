@@ -5,11 +5,19 @@
 - Run date: April 21, 2026
 - Target path: single local Ollama model via [config.local_single_qwen.yaml](../aegis/config.local_single_qwen.yaml)
 - Target model: `qwen3.5:0.8b`
-- Attack scope: 15 modules, 191 payloads
+- Attack scope: 15 modules, 191 payloads (the corpus at run time)
 - Baseline artifact: `reports/baseline.json` (local run output, gitignored)
 - Raw payload log: `reports/attack_results_0c9c3d74-756e-4230-9686-a356f80c3c69.jsonl` (local run output, gitignored)
 
 This run was executed one model at a time on local Ollama. The target and judge both used the same local Qwen model. The validated path uses Ollama chat requests with `think: false` because Qwen thinking models can return empty `response` values on `/api/generate`.
+
+## Scope of this document
+
+This is a snapshot of the April 21 run. The repo has moved on since then:
+
+- The corpus now has 17 modules and 238 payloads. `asi08_cascading_failure` (12 payloads) and `asi10_rogue_agent` (14 payloads) are new and have **not been baselined**. `asi07_inter_agent` grew from 14 to 22 payloads, `llm01_prompt_inject` from 13 to 19, and `mcp06_cmd_injection` from 10 to 17.
+- On April 29 a per-module cap (`attacks.payloads_per_module`, 10 in the bundled configs) was added. A default scan with `config.local_single_qwen.yaml` now runs at most 150 payloads, so it will not reproduce the 191-payload figures below. Raise the cap in your config to run everything.
+- The target was a very small model (`qwen3.5:0.8b`). Treat the numbers as evidence that the harness works, not as a benchmark of a production model.
 
 ## Baseline summary
 

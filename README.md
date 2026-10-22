@@ -8,10 +8,10 @@
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-859%20passed-brightgreen)](#testing)
-[![Coverage](https://img.shields.io/badge/coverage-88.8%25-brightgreen)](#testing)
-[![Attack Modules](https://img.shields.io/badge/attacks-15-orange)]()
-[![Payloads](https://img.shields.io/badge/payloads-191-red)]()
+[![Tests](https://img.shields.io/badge/tests-907%20passed-brightgreen)](#testing)
+[![Coverage](https://img.shields.io/badge/coverage-88%25-brightgreen)](#testing)
+[![Attack Modules](https://img.shields.io/badge/attacks-17-orange)]()
+[![Payloads](https://img.shields.io/badge/payloads-238-red)]()
 
 [Quick Start](#quick-start) · [Workflow](#how-aegis-works) · [CLI Usage](#cli-usage) · [Attack Surface](#attack-surface) · [Integrate Your Model](#integrate-your-own-model) · [Docs](#documentation)
 
@@ -24,7 +24,7 @@
 > | | |
 > |---|---|
 > | **What** | Red-team framework for LLM agents — fires adversarial payloads, scores results, emits auditable reports |
-> | **Ships with** | 15 attack modules · 5 defenses · 191 payloads · rule-based + LLM-judge dual scorer |
+> | **Ships with** | 17 attack modules · 5 defenses · 238 payloads · rule-based + LLM-judge dual scorer |
 > | **Start here** | `uv run aegis guide` |
 
 ---
@@ -37,7 +37,7 @@ It is built for AI teams at companies shipping agents, MCP servers, RAG systems,
 
 It is designed for the reality of modern agentic systems: tool use, MCP servers, RAG, multi-turn conversations, and the gap between "the model refuses" and "the agent still does the dangerous thing."
 
-> **Latest validation:** the local Ollama path was tested with `qwen3.5:0.8b` — 191 payloads, **75.39% overall ASR** (Attack Success Rate). See [baseline.json](reports/baseline.json).
+> **Latest live baseline (April 21, 2026):** the local Ollama path was tested with `qwen3.5:0.8b` — 191 payloads across 15 modules, **75.39% overall ASR** (Attack Success Rate). That is a very small model, so read it as a check that the harness works, not as a benchmark of a production model. The corpus has since grown to 238 payloads across 17 modules, and scans are now capped per module (see [How Many Payloads Does a Scan Run?](#how-many-payloads-does-a-scan-run)); the new ASI08 and ASI10 modules and the added ASI07, LLM01, and MCP06 payloads have not been baselined yet. The raw `baseline.json` is local run output and is not committed; [reports/sample_baseline_report.html](reports/sample_baseline_report.html) shows what a report looks like.
 
 ## How AEGIS Works
 
@@ -64,7 +64,7 @@ flowchart TD
 
 | | |
 |---|---|
-| **15 attack modules** | Goal hijack, tool misuse, supply chain, code exec, memory poisoning, MCP injection, cross-lingual prompts, and more |
+| **17 attack modules** | Goal hijack, tool misuse, supply chain, code exec, memory poisoning, MCP injection, cross-lingual prompts, cascading failures, rogue agents, and more |
 | **5 defense modules** | Layered hardening — input validation, output filtering, tool boundaries, MCP integrity, permission enforcement |
 | **Dual-scorer evaluation** | Deterministic rule-based scoring + LLM-judge confirmation |
 | **Low-VRAM friendly** | One Ollama model can serve as both target and judge on consumer hardware |
@@ -445,6 +445,20 @@ For hosted providers, copy `aegis/config.hosted.yaml`, set your provider fields,
 5. **Optional defenses** sit between the attacker and agent so you can measure whether a guardrail reduces risk.
 6. **Reports** are written as JSON or HTML for audit, CI, and human review.
 
+### How Many Payloads Does a Scan Run?
+
+The corpus holds 238 payloads (235 in the YAML files plus 3 generated encoded variants), but each config caps how many run per module through `attacks.payloads_per_module`:
+
+| Config | Modules | Cap per module | Payloads per scan (at most) |
+|---|---:|---:|---:|
+| `aegis/config.yaml` | 17 | 10 | 170 |
+| `aegis/config.local_single_qwen.yaml` | 15 (no ASI08 or ASI10) | 10 | 150 |
+| `aegis/config.hosted.yaml` | 3 | 5 | 15 |
+
+The cap keeps the first payloads in each module's file, in file order. With the bundled `aegis/config.yaml` that means a scan runs 170 of the 238 payloads and skips the later ones in the larger modules: all 21 negative controls (benign cases that should not count as attacks), the ASI07 impersonation and relay payloads, the MCP06 spoofing payloads, and most of the cross-lingual mixed-script and homoglyph payloads. Without negative controls a scan cannot measure false positives.
+
+To run every payload, set `attacks.payloads_per_module` to a large number such as `1000` in your own config. The April 21 baseline ran 191 payloads before this cap was added (April 29), so a default scan today will not reproduce those exact figures.
+
 ### Scoring Model
 
 | Scorer | What it checks |
@@ -461,7 +475,7 @@ ASR is computed only over conclusive model-behavior verdicts. Provider/runtime f
 ## Attack Surface
 
 <details open>
-<summary><b>15 active modules — click for the latest baseline ASR</b></summary>
+<summary><b>17 active modules — click for the latest baseline ASR</b></summary>
 
 | Module | Category | ASR (baseline) |
 |---|---|---:|
@@ -480,6 +494,10 @@ ASR is computed only over conclusive model-behavior verdicts. Provider/runtime f
 | `asi06_memory_poison` | Memory & Context Poisoning | **7/13 — 53.9%** |
 | `llm02_data_disclosure` | Sensitive Information Disclosure | **5/10 — 50.0%** |
 | `llm01_prompt_inject` | Prompt Injection | **5/13 — 38.5%** |
+| `asi08_cascading_failure` | Cascading Failures | not yet measured (12 payloads) |
+| `asi10_rogue_agent` | Rogue Agents | not yet measured (14 payloads) |
+
+> **Reading this table:** the ASR figures come from the April 21 run against 191 payloads. Since then `asi07_inter_agent` grew from 14 to 22 payloads, `llm01_prompt_inject` from 13 to 19, and `mcp06_cmd_injection` from 10 to 17. Those rows show the earlier counts until the next baseline.
 
 > **Key insight:** classic prompt-injection is the *least* effective vector against this target. The biggest risks are **supply chain, tool misuse, semantic manipulation, and approval-failure** patterns — the places where the agent's *scaffolding* is exploited, not its text prompt.
 
@@ -641,7 +659,7 @@ AEGIS_TARGET_MODEL=<your-model>:<tag> uv run aegis scan --format json --output r
 
 ```
 aegis/
-├── attacks/         # 15 attack modules (payload generators)
+├── attacks/         # 17 attack modules (payload generators)
 ├── defenses/        # 5 guardrail modules
 ├── evaluation/      # rule-based + LLM-judge scorers
 ├── testbed/         # agent harness, MCP servers, RAG, memory
@@ -657,7 +675,7 @@ dashboard/           # Streamlit dashboard (optional)
 datasets/            # fixtures, KB corpora, payload seeds
 docs/                # methodology, findings, evaluation reports
 reports/             # generated scan artifacts (local)
-tests/               # 859 tests, 88.8% coverage
+tests/               # 907 tests, 88% coverage
 ```
 
 ---
